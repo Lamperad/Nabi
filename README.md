@@ -43,10 +43,22 @@ The figure crumbles to dust, leaving behind a glowing chest.
 
 ### Importing Tales
 
-1. Save your tale as a `.txt` file
+**From a file:**
+1. Save your tale as a `.txt` or `.fadein` file
 2. Open Nabi → **Manage Tales** → **Import Tale from File**
 3. Enter the file path and give it a name
 4. The tale appears in your **Tales** list
+
+**By pasting:**
+1. Open Nabi → **Manage Tales** → **Paste Tale Content**
+2. Give the tale a name
+3. Paste your screenplay text directly into the terminal
+4. Type `END` on a new line and press Enter
+
+**Supported formats:**
+- `.txt` — plain text screenplay format
+- `.fadein` — Fade In Professional Screenwriting files (ZIP/XML)
+- Raw Open Screenplay Format XML
 
 ### System Triggers
 
@@ -66,11 +78,18 @@ If the player dies during combat, the tale ends early and returns to the menu.
 
 ### Screenplay Format Rules
 
+**Plain text (`.txt`):**
 - **Scene headings** start with `INT.` or `EXT.`
 - **Character names** are written in ALL CAPS on their own line
 - **Dialogue** follows the character name (blank line between is fine)
 - **Action/description** is any other text within a scene
 - **Triggers** are `[TAG]` on their own line
+
+**Fade In (`.fadein`):**
+- Standard Fade In files are auto-detected and parsed
+- Scene Heading, Character, Dialogue, Parenthetical, Action, and Transition styles are all recognized
+- You can embed `[TRIGGER]` tags in Action paragraphs within Fade In
+- Supports OSF versions 1.2, 2.x, and 4.x
 
 ### Core Systems
 

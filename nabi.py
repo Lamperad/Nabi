@@ -5,6 +5,8 @@ import random
 import copy
 import re
 import textwrap
+import zipfile
+import xml.etree.ElementTree as ET
 
 VERSION = "3.0.0"
 SAVE_FILE = "save_data.json"
@@ -374,9 +376,101 @@ def save_tales_index(index):
         json.dump(index, f, indent=4)
 
 
-def parse_screenplay(filepath):
+def parse_fadein_xml(xml_content):
     """
-    Parse a screenplay / fade-in format file into structured tale data.
+    Parse Open Screenplay Format XML (from a .fadein ZIP or raw XML)
+    into the same tale data structure used by the text parser.
+
+    Handles OSF versions 1.2 (basestylename), 2.x (baseStyleName),
+    and 4.x (basestyle).
+    """
+    root = ET.fromstring(xml_content)
+    paragraphs = root.find("paragraphs")
+    if paragraphs is None:
+        return {"raw": xml_content, "scenes": []}
+
+    tale_data = {"raw": xml_content, "scenes": []}
+    current_scene = None
+    current_speaker = None
+
+    for para in paragraphs.findall("para"):
+        style_el = para.find("style")
+        if style_el is None:
+            continue
+
+        # Handle all OSF version attribute names
+        style_name = (
+            style_el.get("basestyle")
+            or style_el.get("basestylename")
+            or style_el.get("baseStyleName")
+            or ""
+        ).lower()
+
+        # Collect all <text> elements into one string
+        text_parts = [t.text or "" for t in para.findall("text")]
+        text = "".join(text_parts).strip()
+        if not text:
+            continue
+
+        if style_name == "scene heading":
+            current_scene = {"heading": text, "beats": []}
+            tale_data["scenes"].append(current_scene)
+            current_speaker = None
+
+        elif style_name == "character":
+            current_speaker = text
+
+        elif style_name in ("dialogue", "parenthetical"):
+            if current_speaker and current_scene is not None:
+                line = f"({text})" if style_name == "parenthetical" else text
+                current_scene["beats"].append({
+                    "type": "dialogue",
+                    "speaker": current_speaker,
+                    "line": line
+                })
+                current_speaker = None
+
+        elif style_name == "transition":
+            if current_scene is not None:
+                current_scene["beats"].append({"type": "action", "text": text})
+            current_speaker = None
+
+        else:
+            # Action, Shot, or any other style
+            if TRIGGER_RE.match(text):
+                if current_scene is not None:
+                    current_scene["beats"].append({
+                        "type": "trigger",
+                        "tag": text[1:-1].strip()
+                    })
+            elif current_scene is not None:
+                current_scene["beats"].append({"type": "action", "text": text})
+            else:
+                if not tale_data.get("header"):
+                    tale_data["header"] = []
+                tale_data["header"].append(text)
+            current_speaker = None
+
+    return tale_data
+
+
+def parse_fadein_file(filepath):
+    """
+    Read a .fadein file (ZIP containing document.xml) and parse it.
+    Falls back to reading it as raw XML if it isn't a valid ZIP.
+    """
+    try:
+        with zipfile.ZipFile(filepath, "r") as zf:
+            xml_bytes = zf.read("document.xml")
+            return parse_fadein_xml(xml_bytes.decode("utf-8"))
+    except (zipfile.BadZipFile, KeyError):
+        with open(filepath, "r") as f:
+            return parse_fadein_xml(f.read())
+
+
+def parse_screenplay_text(content):
+    """
+    Parse plain-text screenplay content into structured tale data.
 
     Supports embedded system trigger tags that fire core systems
     during tale playback:
@@ -389,9 +483,6 @@ def parse_screenplay(filepath):
         [GAIN_COINS: 100]       - awards coins
         [SAVE]                  - saves progress mid-tale
     """
-    with open(filepath, "r") as f:
-        content = f.read()
-
     lines = content.strip().split("\n")
     tale_data = {"raw": content, "scenes": []}
 
@@ -448,6 +539,25 @@ def parse_screenplay(filepath):
     return tale_data
 
 
+def parse_screenplay(filepath):
+    """
+    Auto-detect file type and parse accordingly:
+    - .fadein files -> ZIP/XML parser
+    - anything else -> plain-text screenplay parser
+    """
+    if filepath.lower().endswith(".fadein"):
+        return parse_fadein_file(filepath)
+
+    with open(filepath, "r") as f:
+        content = f.read()
+
+    # If it looks like XML, try the XML parser
+    if content.strip().startswith("<?xml") or "<document" in content[:200]:
+        return parse_fadein_xml(content)
+
+    return parse_screenplay_text(content)
+
+
 def execute_trigger(tag):
     """
     Run a core system based on a trigger tag embedded in a tale.
@@ -497,6 +607,9 @@ def import_tale(filepath, tale_name=None):
     """Import a tale from a screenplay / fade-in file."""
     ensure_tales_dir()
 
+    # Strip surrounding quotes from the path (common on Windows copy-paste)
+    filepath = filepath.strip('"').strip("'")
+
     if not os.path.exists(filepath):
         print(f">> Error: File '{filepath}' not found.")
         return False
@@ -505,6 +618,30 @@ def import_tale(filepath, tale_name=None):
         tale_name = os.path.splitext(os.path.basename(filepath))[0]
 
     tale_data = parse_screenplay(filepath)
+    tale_id = f"tale_{random.randint(10000, 99999)}"
+
+    tale_file = os.path.join(TALES_DIR, f"{tale_id}.json")
+    with open(tale_file, "w") as f:
+        json.dump(tale_data, f, indent=4)
+
+    index = load_tales_index()
+    index[tale_id] = {"name": tale_name, "file": tale_file}
+    save_tales_index(index)
+
+    print(f">> Tale '{tale_name}' imported successfully! (ID: {tale_id})")
+    return True
+
+
+def import_tale_from_text(content, tale_name):
+    """Import a tale from pasted screenplay text."""
+    ensure_tales_dir()
+
+    # If it looks like XML, use the XML parser
+    if content.strip().startswith("<?xml") or "<document" in content[:200]:
+        tale_data = parse_fadein_xml(content)
+    else:
+        tale_data = parse_screenplay_text(content)
+
     tale_id = f"tale_{random.randint(10000, 99999)}"
 
     tale_file = os.path.join(TALES_DIR, f"{tale_id}.json")
@@ -692,13 +829,14 @@ def browse_tales():
 
 
 def manage_tales():
-    """Tale management menu: import, rename, delete."""
+    """Tale management menu: import from file, paste, rename, delete."""
     while True:
         print(f"\n--- MANAGE TALES ---")
-        print("1. Import Tale from File")
-        print("2. Rename Tale")
-        print("3. Delete Tale")
-        print("4. Back")
+        print("1. Import Tale from File (.txt, .fadein)")
+        print("2. Paste Tale Content")
+        print("3. Rename Tale")
+        print("4. Delete Tale")
+        print("5. Back")
 
         choice = get_input("Select: ").strip()
 
@@ -706,11 +844,31 @@ def manage_tales():
             filepath = get_input("Enter file path: ").strip()
             tale_name = get_input("Name this tale (or press Enter to use filename): ").strip()
             import_tale(filepath, tale_name if tale_name else None)
+
         elif choice == "2":
-            rename_tale()
+            tale_name = get_input("Name this tale: ").strip()
+            if not tale_name:
+                print(">> Name cannot be empty.")
+                continue
+            print("Paste your screenplay below. When done, type END on a new line and press Enter.")
+            print("-" * 35)
+            lines = []
+            while True:
+                line = input()
+                if line.strip().upper() == "END":
+                    break
+                lines.append(line)
+            content = "\n".join(lines)
+            if content.strip():
+                import_tale_from_text(content, tale_name)
+            else:
+                print(">> No content pasted.")
+
         elif choice == "3":
-            delete_tale()
+            rename_tale()
         elif choice == "4":
+            delete_tale()
+        elif choice == "5":
             return
         else:
             print(">> Invalid choice.")
