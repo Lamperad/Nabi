@@ -129,6 +129,12 @@ except Exception:
 
 screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
 pygame.display.set_caption(f"Nabi v{VERSION}")
+_icon_path = os.path.join(ASSET_DIR, "icon.png")
+if os.path.exists(_icon_path):
+    try:
+        pygame.display.set_icon(pygame.image.load(_icon_path))
+    except Exception:
+        pass
 clock = pygame.time.Clock()
 
 font_sm = pygame.font.SysFont("consolas", 16)
@@ -1129,7 +1135,7 @@ def scene_dan_transforms():
         # Screen shake + red flash
         if t > 0.3:
             flash = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
-            flash.fill((180, 0, 0, int(40 * math.sin(t * 10))))
+            flash.fill((180, 0, 0, max(0, int(40 * math.sin(t * 10)))))
             screen.blit(flash, (0, 0))
         draw_text("--- TRANSFORMATION ---", font_lg, C_RED, SCREEN_W // 2, 30, "center")
         player_sprite.draw(screen)
