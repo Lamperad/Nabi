@@ -352,9 +352,9 @@ def main_menu():
         if choice == "yes":
             if load_game():
                 name = get_input("Confirm your hero's name: ")
-                play_game()
-                return
-    name = get_input("What should i call you, Oh great noble warrior? ")
+
+    if name.strip() == "":
+        name = get_input("What should i call you, Oh great noble warrior? ")
     
     while True:
         print("\n--- MAIN MENU ---")
@@ -405,6 +405,9 @@ def play_game():
                 continue
             if dan_answer == "speak":
                 dan_patience += 1
+            else:
+                print("Invalid choice. Please enter Back or Speak.")
+                continue
 
             if dan_patience >= 3:
                 print(f"\nDan: THAT'S IT! I told you to leave!")
