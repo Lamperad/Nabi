@@ -1,117 +1,72 @@
 # Nabi
 
-A text-based RPG engine that converts screenplay/fade-in files into interactive tales.
+An audiovisual RPG built with Pygame. Explore the dark forest, confront Dan, and battle demons — all with graphics, sound effects, and animated UI.
 
 ## Quick Start
 
 ```bash
+pip install -r requirements.txt
+python nabi_gui.py
+```
+
+Or run the original text-based version:
+```bash
 python nabi.py
 ```
 
-## How It Works
+## Requirements
 
-Nabi is built around **tales** — screenplay-format text files that Nabi parses and plays back as interactive narratives. Your stats, inventory, and progression persist across all tales.
+- Python 3.8+
+- Pygame 2.5+
 
-### Main Menu
+## Features
 
-- **Tales** — browse and play available tales
-- **Manage Tales** — import, rename, or delete tales
-- **Save Game** — save your current stats
-- **Quit** — save and exit
+### Visual UI
+- Rendered game window (960x640) with styled panels, menus, and stat bars
+- HP/DP/XP bars with real-time updates
+- Typewriter text effect for story narration
+- Animated loot box opening sequence
+- Screen shake and flash effects in combat
+- Fade transitions between scenes
+- Pulsing animated title screen
 
-### Writing Tales
-
-Tales are plain text files in standard screenplay format:
-
-```
-INT. DARK FOREST - NIGHT
-
-The wind howls through the trees. A shadowy figure blocks the path.
-
-STRANGER
-
-You shouldn't be here, traveler.
-
-[COMBAT: Shadow Knight]
-
-The figure crumbles to dust, leaving behind a glowing chest.
-
-[LOOT_BOX]
-
-[SAVE]
-```
-
-### Importing Tales
-
-**From a file:**
-1. Save your tale as a `.txt` or `.fadein` file
-2. Open Nabi → **Manage Tales** → **Import Tale from File**
-3. Enter the file path and give it a name
-4. The tale appears in your **Tales** list
-
-**By pasting:**
-1. Open Nabi → **Manage Tales** → **Paste Tale Content**
-2. Give the tale a name
-3. Paste your screenplay text directly into the terminal
-4. Type `END` on a new line and press Enter
-
-**Supported formats:**
-- `.txt` — plain text screenplay format
-- `.fadein` — Fade In Professional Screenwriting files (ZIP/XML)
-- Raw Open Screenplay Format XML
-
-### System Triggers
-
-Embed these tags in your screenplay files to fire core systems mid-tale:
-
-| Tag | What it does |
-|-----|-------------|
-| `[COMBAT: Enemy Name]` | Starts a battle against the named enemy |
-| `[SHOP]` | Opens the trading post |
-| `[LOOT_BOX]` | Opens a mystery loot box |
-| `[CURSED_LOOT_BOX]` | Opens a cursed loot box |
-| `[GAIN_XP: 50]` | Awards XP (triggers level-up if enough) |
-| `[GAIN_COINS: 100]` | Awards coins (capped at 500) |
-| `[SAVE]` | Saves progress mid-tale |
-
-If the player dies during combat, the tale ends early and returns to the menu.
-
-### Screenplay Format Rules
-
-**Plain text (`.txt`):**
-- **Scene headings** start with `INT.` or `EXT.`
-- **Character names** are written in ALL CAPS on their own line
-- **Dialogue** follows the character name (blank line between is fine)
-- **Action/description** is any other text within a scene
-- **Triggers** are `[TAG]` on their own line
-
-**Fade In (`.fadein`):**
-- Standard Fade In files are auto-detected and parsed
-- Scene Heading, Character, Dialogue, Parenthetical, Action, and Transition styles are all recognized
-- You can embed `[TRIGGER]` tags in Action paragraphs within Fade In
-- Supports OSF versions 1.2, 2.x, and 4.x
+### Sound Effects
+- Combat: attack hits, defend, player damage, demon roar
+- Systems: shop purchase, loot box open, cursed loot, coin drops
+- UI: menu clicks, text ticks, save confirmation
+- Events: victory fanfare, defeat, level up, flee, potion use
 
 ### Core Systems
-
-All systems persist across tales through `save_data.json`:
-
-- **Combat** — turn-based battles with attack, defend, items, flee, and mid-combat shop access
+- **Combat** — turn-based battles with attack, defend, items, flee, and mid-combat shop
 - **Shop** — buy HP/DP restores, permanent stat buffs, potions, and max HP upgrades
 - **Loot Boxes** — random rewards (weapons, stat boosts, coins, or curses)
 - **XP & Leveling** — 100 XP per level, each level boosts ATK/HP/DP
-- **Cowardice** — fleeing combat increases cowardice, making future enemies stronger
-- **Inventory** — HP and DP potions usable in combat
+- **Cowardice** — fleeing combat makes future enemies stronger
+- **Save/Load** — persistent progress via save_data.json with death recovery
 
-### Cheats
+### The Story
+- Dark forest with branching paths
+- Dan's field — visit too many times and he transforms into a demon
+- Multiple dialogue choices with consequences
+- Trap path (Dan's offer) with proper GAME OVER and recovery
 
-- Type `godmode` at any prompt to max out HP/ATK/DEF
-- Type `kill` during combat to instantly win
+### Controls
+- **Mouse** — click buttons and menus
+- **Keyboard** — press 1-8 to select menu options
+- **Cheats** — press K in combat to instant-kill, G for godmode
 
 ## File Structure
 
 ```
-nabi.py            # Main game engine
+nabi_gui.py        # Audiovisual game (Pygame)
+nabi.py            # Original text-based game
+requirements.txt   # Python dependencies
+assets/
+  sounds/          # Generated WAV sound effects
 save_data.json     # Player save file (auto-generated)
-tales/             # Parsed tale JSON files (auto-generated)
-tales_index.json   # Tale registry (auto-generated)
 ```
+
+## Versions
+
+- **v3.0.0** — Audiovisual Pygame edition (current)
+- **v2.1.0** — Text-based with bug fixes (nabi.py)
