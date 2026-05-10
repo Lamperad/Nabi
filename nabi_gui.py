@@ -1,6 +1,7 @@
 """
-Nabi v3.0.0 — Audiovisual RPG (Pygame)
-Animated characters, parallax backgrounds, fluid movement, and sound.
+Nabi v4.0.0 — Audiovisual RPG (Pygame)
+Animated characters, parallax backgrounds, fluid movement, sound,
+arcade mode with multiple monsters, cheat menu, and resizable window.
 """
 
 import pygame
@@ -14,9 +15,10 @@ import math
 # ---------------------------------------------------------------------------
 #  CONSTANTS
 # ---------------------------------------------------------------------------
-VERSION = "3.0.0"
+VERSION = "4.0.0"
 SAVE_FILE = "save_data.json"
-SCREEN_W, SCREEN_H = 960, 640
+ARCADE_SAVE_FILE = "arcade_save.json"
+SCREEN_W, SCREEN_H = 1280, 720
 FPS = 60
 if getattr(sys, 'frozen', False):
     _BASE_DIR = sys._MEIPASS
@@ -127,7 +129,7 @@ try:
 except Exception:
     AUDIO_OK = False
 
-screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
+screen = pygame.display.set_mode((SCREEN_W, SCREEN_H), pygame.RESIZABLE)
 pygame.display.set_caption(f"Nabi v{VERSION}")
 _icon_path = os.path.join(ASSET_DIR, "icon.png")
 if os.path.exists(_icon_path):
@@ -306,6 +308,72 @@ spr_demon_attack = load_sheet("demon_attack")
 spr_dan_transform = load_sheet("dan_transform")
 spr_narrator = load_sheet("narrator_idle")
 
+# Arcade monster sprites
+spr_skeleton_idle = load_sheet("skeleton_idle")
+spr_skeleton_attack = load_sheet("skeleton_attack")
+spr_slime_idle = load_sheet("slime_idle")
+spr_slime_attack = load_sheet("slime_attack")
+spr_wraith_idle = load_sheet("wraith_idle")
+spr_wraith_attack = load_sheet("wraith_attack")
+spr_golem_idle = load_sheet("golem_idle")
+spr_golem_attack = load_sheet("golem_attack")
+spr_spider_idle = load_sheet("spider_idle")
+spr_spider_attack = load_sheet("spider_attack")
+spr_dk_idle = load_sheet("dark_knight_idle")
+spr_dk_attack = load_sheet("dark_knight_attack")
+
+# Monster type definitions for arcade mode
+MONSTER_TYPES = [
+    {
+        "name": "Skeleton Warrior",
+        "idle": spr_skeleton_idle,
+        "attack": spr_skeleton_attack,
+        "pattern": "aggressive",
+        "base_hp": 60, "base_atk": 18, "base_def": 8,
+        "color": (210, 200, 180),
+    },
+    {
+        "name": "Toxic Slime",
+        "idle": spr_slime_idle,
+        "attack": spr_slime_attack,
+        "pattern": "poison",
+        "base_hp": 45, "base_atk": 12, "base_def": 5,
+        "color": (40, 180, 60),
+    },
+    {
+        "name": "Shadow Wraith",
+        "idle": spr_wraith_idle,
+        "attack": spr_wraith_attack,
+        "pattern": "evasive",
+        "base_hp": 50, "base_atk": 22, "base_def": 4,
+        "color": (160, 80, 200),
+    },
+    {
+        "name": "Fire Golem",
+        "idle": spr_golem_idle,
+        "attack": spr_golem_attack,
+        "pattern": "tank",
+        "base_hp": 100, "base_atk": 15, "base_def": 18,
+        "color": (230, 140, 50),
+    },
+    {
+        "name": "Ice Spider",
+        "idle": spr_spider_idle,
+        "attack": spr_spider_attack,
+        "pattern": "freeze",
+        "base_hp": 55, "base_atk": 20, "base_def": 6,
+        "color": (80, 140, 200),
+    },
+    {
+        "name": "Dark Knight",
+        "idle": spr_dk_idle,
+        "attack": spr_dk_attack,
+        "pattern": "berserker",
+        "base_hp": 80, "base_atk": 20, "base_def": 15,
+        "color": (120, 100, 140),
+    },
+]
+
 # Create sprite instances
 player_sprite = AnimatedSprite(spr_player_idle, 100, 350, fps=5)
 dan_sprite = AnimatedSprite(spr_dan_idle, 650, 350, fps=5)
@@ -431,12 +499,19 @@ class Button:
 # ---------------------------------------------------------------------------
 #  CORE UI FUNCTIONS
 # ---------------------------------------------------------------------------
+def handle_resize(event):
+    global screen, SCREEN_W, SCREEN_H
+    SCREEN_W, SCREEN_H = max(800, event.w), max(600, event.h)
+    screen = pygame.display.set_mode((SCREEN_W, SCREEN_H), pygame.RESIZABLE)
+
 def pump_events():
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             save_game()
             pygame.quit()
             sys.exit()
+        if event.type == pygame.VIDEORESIZE:
+            handle_resize(event)
 
 def get_text_input(prompt, max_len=20):
     text = ""
@@ -444,6 +519,8 @@ def get_text_input(prompt, max_len=20):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 save_game(); pygame.quit(); sys.exit()
+            if event.type == pygame.VIDEORESIZE:
+                handle_resize(event)
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN and text.strip():
                     play_sound("menu_click")
@@ -589,6 +666,13 @@ def show_menu(title, options, sprites=None, subtitle=""):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 save_game(); pygame.quit(); sys.exit()
+            if event.type == pygame.VIDEORESIZE:
+                handle_resize(event)
+                for bi in range(len(buttons)):
+                    bw, bh = 400, 44
+                    bx = SCREEN_W // 2 - bw // 2
+                    by_pos = start_y + bi * (bh + 10)
+                    buttons[bi].rect = pygame.Rect(bx, by_pos, bw, bh)
             for i, btn in enumerate(buttons):
                 if btn.clicked(event):
                     play_sound("menu_click")
@@ -618,6 +702,8 @@ def show_message(text, color=C_TEXT, duration=0, sprites=None):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 save_game(); pygame.quit(); sys.exit()
+            if event.type == pygame.VIDEORESIZE:
+                handle_resize(event)
             if duration == 0 and event.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
                 return
         if duration > 0 and pygame.time.get_ticks() - start > duration:
@@ -761,6 +847,50 @@ def loot_box_screen(is_cursed=False):
 
 
 # ---------------------------------------------------------------------------
+#  CHEAT MENU
+# ---------------------------------------------------------------------------
+def cheat_menu(log, enemies=None):
+    """Show cheat submenu. Returns (action, log_entries).
+    enemies is a list of dicts with 'hp' keys for arcade multi-enemy."""
+    cheats = [
+        "Kill All Enemies",
+        "Godmode (999 HP/ATK/DEF)",
+        "Full Heal",
+        "Max Coins (500)",
+        "Level Up",
+        "Back",
+    ]
+    ch = show_menu("CHEAT CODES", cheats)
+    if ch == 0:
+        if enemies:
+            for e in enemies:
+                e["hp"] = 0
+        log.append("[CHEAT] Forbidden spell! All enemies slain!")
+        return "kill"
+    elif ch == 1:
+        player_stats["hp"] = player_stats["max_hp"] = 999
+        player_stats["atk"] = 999
+        player_stats["def"] = player_stats["max_def"] = 999
+        log.append("[CHEAT] GODMODE activated!")
+        return "godmode"
+    elif ch == 2:
+        player_stats["hp"] = player_stats["max_hp"]
+        player_stats["def"] = player_stats["max_def"]
+        log.append("[CHEAT] Fully healed!")
+        return "heal"
+    elif ch == 3:
+        player_stats["coins"] = 500
+        log.append("[CHEAT] Wallet maxed to 500 coins!")
+        return "coins"
+    elif ch == 4:
+        player_stats["xp"] += 100
+        gain_xp(0)
+        log.append(f"[CHEAT] Level Up! Now Lv.{player_stats['level']}")
+        return "levelup"
+    return "back"
+
+
+# ---------------------------------------------------------------------------
 #  COMBAT
 # ---------------------------------------------------------------------------
 def combat_screen(enemy_name):
@@ -777,7 +907,7 @@ def combat_screen(enemy_name):
     is_demon = "demon" in enemy_name.lower()
     enemy_sheet = spr_demon_idle if is_demon else spr_dan_idle
     enemy_attack_sheet = spr_demon_attack if is_demon else spr_dan_angry
-    enemy_sprite = AnimatedSprite(enemy_sheet, 620, 280, fps=5)
+    enemy_sprite = AnimatedSprite(enemy_sheet, SCREEN_W - 300, 280, fps=5)
     enemy_sprite.flip_h = True
 
     player_sprite.set_sheet(spr_player_idle)
@@ -793,14 +923,14 @@ def combat_screen(enemy_name):
     shake_timer = 0
 
     while player_stats["hp"] > 0 and e_hp > 0:
-        actions = ["Attack", "Defend", "Use Item", "Run", "Shop", "Quit"]
+        actions = ["Attack", "Defend", "Use Item", "Run", "Shop", "Cheats", "Quit"]
         buttons = []
         for i, act in enumerate(actions):
             key_map = {0: pygame.K_1, 1: pygame.K_2, 2: pygame.K_3,
-                       3: pygame.K_4, 4: pygame.K_5, 5: pygame.K_6}
-            bw, bh = 140, 38
-            col_i = i % 3; row_i = i // 3
-            bx = 30 + col_i * (bw + 10)
+                       3: pygame.K_4, 4: pygame.K_5, 5: pygame.K_6, 6: pygame.K_7}
+            bw, bh = 130, 38
+            col_i = i % 4; row_i = i // 4
+            bx = 30 + col_i * (bw + 8)
             by = SCREEN_H - 100 + row_i * (bh + 8)
             buttons.append(Button((bx, by, bw, bh), f"{i+1}.{act}", font=font_sm, key=key_map.get(i)))
 
@@ -810,12 +940,8 @@ def combat_screen(enemy_name):
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     save_game(); pygame.quit(); sys.exit()
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_k:
-                        action_idx = -1; break
-                    if event.key == pygame.K_g:
-                        player_stats["hp"] = player_stats["atk"] = player_stats["def"] = 999
-                        log.append("[CHEAT] GODMODE!"); action_idx = -2; break
+                if event.type == pygame.VIDEORESIZE:
+                    handle_resize(event)
                 for i, btn in enumerate(buttons):
                     if btn.clicked(event):
                         play_sound("menu_click"); action_idx = i; break
@@ -833,22 +959,19 @@ def combat_screen(enemy_name):
             player_sprite.update(dt)
             enemy_sprite.update(dt)
 
-            # Draw sprites with shake offset
             old_ex, old_ey = enemy_sprite.x, enemy_sprite.y
             enemy_sprite.x += sx; enemy_sprite.y += sy
             player_sprite.draw(screen)
             enemy_sprite.draw(screen)
             enemy_sprite.x, enemy_sprite.y = old_ex, old_ey
 
-            # Enemy HP panel
-            draw_panel((480, 40, 300, 100), fill=(50, 20, 20))
-            draw_text(enemy_name, font_lg, C_RED, 630, 55, "center")
-            draw_bar(500, 95, 260, 22, max(0, e_hp), e_max_hp, C_RED, C_HP_BG,
+            draw_panel((SCREEN_W - 320, 40, 300, 100), fill=(50, 20, 20))
+            draw_text(enemy_name, font_lg, C_RED, SCREEN_W - 170, 55, "center")
+            draw_bar(SCREEN_W - 300, 95, 260, 22, max(0, e_hp), e_max_hp, C_RED, C_HP_BG,
                      f"HP {max(0,e_hp)}/{e_max_hp}")
-            draw_text(f"ATK: {e_atk}", font_sm, C_TEXT_DIM, 510, 125)
+            draw_text(f"ATK: {e_atk}", font_sm, C_TEXT_DIM, SCREEN_W - 300, 125)
             draw_stat_panel(20, 40)
 
-            # Log
             draw_panel((20, SCREEN_H - 250, SCREEN_W - 40, 130), fill=(20, 20, 30))
             ly = SCREEN_H - 242
             for entry in log[-6:]:
@@ -859,11 +982,14 @@ def combat_screen(enemy_name):
                 btn.update(mouse_pos); btn.draw()
             pygame.display.flip()
 
-        if action_idx == 5:
+        if action_idx == 6:  # Quit
             return "menu"
-        if action_idx == -1:
-            log.append("[CHEAT] Forbidden spell!"); e_hp = 0; break
-        if action_idx == -2:
+
+        if action_idx == 5:  # Cheats
+            cheat_result = cheat_menu(log)
+            if cheat_result == "kill":
+                e_hp = 0; break
+            bg.set_static(load_bg("combat"))
             continue
 
         defend_bonus = 0
@@ -871,7 +997,6 @@ def combat_screen(enemy_name):
         if action_idx == 0:  # Attack
             play_sound("attack_hit")
             player_sprite.set_sheet(spr_player_attack)
-            # Animate player lunging forward
             player_sprite.move_to(350, 280)
             wait_for_movement([player_sprite, enemy_sprite], 500)
             e_hp -= player_stats["atk"]
@@ -936,7 +1061,7 @@ def combat_screen(enemy_name):
                 log.append(f"{enemy_name} hits for {e_atk} damage!")
                 shake_timer = 0.3
 
-            enemy_sprite.move_to(620, 280)
+            enemy_sprite.move_to(SCREEN_W - 300, 280)
             enemy_sprite.set_sheet(enemy_sheet)
             wait_for_movement([player_sprite, enemy_sprite], 500)
             player_sprite.set_sheet(spr_player_idle)
@@ -958,6 +1083,398 @@ def combat_screen(enemy_name):
         bg.set_static(load_bg("gameover"))
         typewriter([f"{player_name} has fallen...", "--- GAME OVER ---"], [], narrator_visible=False)
         return "defeat"
+
+
+# ---------------------------------------------------------------------------
+#  ARCADE MODE
+# ---------------------------------------------------------------------------
+def arcade_save_highscore(score, waves):
+    """Save arcade high score."""
+    data = {}
+    if os.path.exists(ARCADE_SAVE_FILE):
+        try:
+            with open(ARCADE_SAVE_FILE, "r") as f:
+                data = json.load(f)
+        except Exception:
+            pass
+    if score > data.get("high_score", 0):
+        data["high_score"] = score
+        data["high_wave"] = waves
+        data["player"] = player_name
+    try:
+        with open(ARCADE_SAVE_FILE, "w") as f:
+            json.dump(data, f, indent=4)
+    except Exception:
+        pass
+    return data.get("high_score", score)
+
+
+def arcade_get_highscore():
+    if os.path.exists(ARCADE_SAVE_FILE):
+        try:
+            with open(ARCADE_SAVE_FILE, "r") as f:
+                data = json.load(f)
+            return data.get("high_score", 0), data.get("high_wave", 0)
+        except Exception:
+            pass
+    return 0, 0
+
+
+def spawn_arcade_wave(wave_num):
+    """Create a list of enemy dicts for the given wave. Up to 3 enemies."""
+    count = min(3, 1 + (wave_num - 1) // 2)
+    scale = 1.0 + (wave_num - 1) * 0.15
+    available = list(MONSTER_TYPES)
+    enemies = []
+    used_types = set()
+    for i in range(count):
+        candidates = [m for m in available if m["name"] not in used_types]
+        if not candidates:
+            candidates = available
+        mtype = random.choice(candidates)
+        used_types.add(mtype["name"])
+        hp = int(mtype["base_hp"] * scale)
+        atk = int(mtype["base_atk"] * scale)
+        dp = int(mtype["base_def"] * scale)
+        # Position enemies spread across right side of screen
+        x_positions = {1: [SCREEN_W - 260], 2: [SCREEN_W - 320, SCREEN_W - 180],
+                       3: [SCREEN_W - 380, SCREEN_W - 240, SCREEN_W - 100]}
+        y_positions = {1: [260], 2: [230, 310], 3: [200, 280, 360]}
+        ex = x_positions[count][i]
+        ey = y_positions[count][i]
+        sprite = AnimatedSprite(mtype["idle"], ex, ey, fps=5)
+        sprite.flip_h = True
+        enemies.append({
+            "name": mtype["name"],
+            "type": mtype,
+            "hp": hp, "max_hp": hp, "atk": atk, "def": dp,
+            "sprite": sprite,
+            "pattern": mtype["pattern"],
+            "color": mtype["color"],
+            "poison_turns": 0,
+            "frozen": False,
+        })
+    return enemies
+
+
+def arcade_combat(wave_num, enemies):
+    """Multi-enemy combat for arcade mode. Returns 'victory' or 'defeat'."""
+    bg.set_static(load_bg("arcade"))
+    fade_transition(300)
+
+    player_sprite.set_sheet(spr_player_idle)
+    player_sprite.set_pos(120, 280)
+
+    log = [f"--- WAVE {wave_num} ---"]
+    names = ", ".join(e["name"] for e in enemies)
+    log.append(f"Enemies: {names}")
+
+    shake_timer = 0
+    frozen_turn = False
+
+    while player_stats["hp"] > 0 and any(e["hp"] > 0 for e in enemies):
+        alive_enemies = [e for e in enemies if e["hp"] > 0]
+
+        # Poison tick
+        for e in alive_enemies:
+            if e.get("poison_turns", 0) > 0:
+                poison_dmg = max(1, e["atk"] // 4)
+                player_stats["hp"] -= poison_dmg
+                log.append(f"Poison from {e['name']}: -{poison_dmg} HP!")
+                e["poison_turns"] -= 1
+
+        if player_stats["hp"] <= 0:
+            break
+
+        # Check frozen
+        if frozen_turn:
+            log.append("You are FROZEN and cannot act!")
+            frozen_turn = False
+        else:
+            # Player selects target and action
+            target_idx = 0
+            if len(alive_enemies) > 1:
+                target_names = [f"{e['name']} (HP:{e['hp']})" for e in alive_enemies]
+                target_idx = show_menu("SELECT TARGET", target_names)
+
+            actions = ["Attack", "Defend", "Use Item", "Shop", "Cheats", "Quit"]
+            buttons = []
+            for i, act in enumerate(actions):
+                key_map = {0: pygame.K_1, 1: pygame.K_2, 2: pygame.K_3,
+                           3: pygame.K_4, 4: pygame.K_5, 5: pygame.K_6}
+                bw, bh = 130, 38
+                col_i = i % 3; row_i = i // 3
+                bx = 30 + col_i * (bw + 8)
+                by = SCREEN_H - 100 + row_i * (bh + 8)
+                buttons.append(Button((bx, by, bw, bh), f"{i+1}.{act}", font=font_sm, key=key_map.get(i)))
+
+            action_idx = None
+            while action_idx is None:
+                mouse_pos = pygame.mouse.get_pos()
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        save_game(); pygame.quit(); sys.exit()
+                    if event.type == pygame.VIDEORESIZE:
+                        handle_resize(event)
+                    for i, btn in enumerate(buttons):
+                        if btn.clicked(event):
+                            play_sound("menu_click"); action_idx = i; break
+                    if action_idx is not None:
+                        break
+
+                dt = clock.tick(FPS) / 1000
+                bg.update(dt)
+                bg.draw(screen)
+
+                sx = random.randint(-2, 2) if shake_timer > 0 else 0
+                sy = random.randint(-2, 2) if shake_timer > 0 else 0
+                shake_timer = max(0, shake_timer - dt)
+
+                player_sprite.update(dt)
+                player_sprite.draw(screen)
+
+                for ei, e in enumerate(alive_enemies):
+                    e["sprite"].update(dt)
+                    old_x, old_y = e["sprite"].x, e["sprite"].y
+                    e["sprite"].x += sx; e["sprite"].y += sy
+                    e["sprite"].draw(screen)
+                    e["sprite"].x, e["sprite"].y = old_x, old_y
+
+                # Draw enemy HP bars
+                for ei, e in enumerate(alive_enemies):
+                    panel_x = SCREEN_W - 340
+                    panel_y = 30 + ei * 80
+                    draw_panel((panel_x, panel_y, 320, 70), fill=(50, 20, 20))
+                    draw_text(e["name"], font_sm, e["color"], panel_x + 160, panel_y + 5, "center")
+                    draw_bar(panel_x + 10, panel_y + 28, 200, 16, max(0, e["hp"]), e["max_hp"],
+                             C_RED, C_HP_BG, f"HP {max(0,e['hp'])}/{e['max_hp']}")
+                    draw_text(f"ATK:{e['atk']}", font_sm, C_TEXT_DIM, panel_x + 220, panel_y + 28)
+                    pattern_label = e["pattern"].upper()
+                    draw_text(pattern_label, font_sm, e["color"], panel_x + 220, panel_y + 48)
+                    if ei == target_idx:
+                        pygame.draw.rect(screen, C_GOLD, (panel_x - 2, panel_y - 2, 324, 74), 2, border_radius=6)
+
+                draw_stat_panel(20, 40)
+                draw_text(f"WAVE {wave_num}", font_lg, C_GOLD, SCREEN_W // 2, 8, "center")
+
+                draw_panel((20, SCREEN_H - 250, SCREEN_W - 40, 130), fill=(20, 20, 30))
+                ly = SCREEN_H - 242
+                for entry in log[-5:]:
+                    draw_text(entry, font_sm, C_TEXT, 35, ly, max_width=SCREEN_W - 80)
+                    ly += 20
+
+                for btn in buttons:
+                    btn.update(mouse_pos); btn.draw()
+                pygame.display.flip()
+
+            if action_idx == 5:  # Quit
+                return "menu"
+
+            if action_idx == 4:  # Cheats
+                cheat_result = cheat_menu(log, enemies=alive_enemies)
+                if cheat_result == "kill":
+                    for e in enemies:
+                        e["hp"] = 0
+                    break
+                bg.set_static(load_bg("arcade"))
+                continue
+
+            target_enemy = alive_enemies[target_idx]
+            defend_bonus = 0
+
+            if action_idx == 0:  # Attack
+                play_sound("attack_hit")
+                player_sprite.set_sheet(spr_player_attack)
+                player_sprite.move_to(target_enemy["sprite"].x - 80, target_enemy["sprite"].y)
+                wait_for_movement([player_sprite] + [e["sprite"] for e in alive_enemies], 500)
+                target_enemy["hp"] -= player_stats["atk"]
+                log.append(f"You strike {target_enemy['name']} for {player_stats['atk']}!")
+                if target_enemy["hp"] <= 0:
+                    log.append(f"{target_enemy['name']} defeated!")
+                    target_enemy["sprite"].visible = False
+                player_sprite.move_to(120, 280)
+                player_sprite.set_sheet(spr_player_idle)
+                shake_timer = 0.3
+
+            elif action_idx == 1:  # Defend
+                defend_bonus = 10
+                play_sound("defend")
+                player_sprite.set_sheet(spr_player_defend)
+                log.append("You brace yourself!")
+
+            elif action_idx == 2:  # Items
+                hp_c = player_stats["inventory"]["hp_potions"]
+                dp_c = player_stats["inventory"]["dp_potions"]
+                ch = show_menu("USE ITEM", [f"HP Potion ({hp_c})", f"DP Potion ({dp_c})", "Back"])
+                if ch == 0 and hp_c > 0:
+                    play_sound("potion"); player_stats["hp"] = player_stats["max_hp"]
+                    player_stats["inventory"]["hp_potions"] -= 1; log.append("Used HP Potion!"); continue
+                elif ch == 1 and dp_c > 0:
+                    play_sound("potion"); player_stats["def"] = player_stats["max_def"]
+                    player_stats["inventory"]["dp_potions"] -= 1; log.append("Used DP Potion!"); continue
+                elif ch in (0, 1):
+                    play_sound("error"); show_message("No potions!", C_RED, 1000)
+                continue
+
+            elif action_idx == 3:  # Shop
+                shop_screen(); bg.set_static(load_bg("arcade")); continue
+
+        # Enemy turns
+        alive_after = [e for e in enemies if e["hp"] > 0]
+        for e in alive_after:
+            if player_stats["hp"] <= 0:
+                break
+
+            e["sprite"].set_sheet(e["type"]["attack"])
+
+            # Apply attack pattern
+            actual_atk = e["atk"]
+            if e["pattern"] == "aggressive":
+                actual_atk = int(e["atk"] * 1.2)
+            elif e["pattern"] == "berserker":
+                hp_ratio = e["hp"] / max(1, e["max_hp"])
+                actual_atk = int(e["atk"] * (1.0 + (1.0 - hp_ratio) * 0.5))
+            elif e["pattern"] == "tank":
+                actual_atk = int(e["atk"] * 0.8)
+            elif e["pattern"] == "evasive":
+                if random.random() < 0.3:
+                    log.append(f"{e['name']} phases through reality and dodges!")
+                    e["sprite"].set_sheet(e["type"]["idle"])
+                    continue
+
+            # Special effects based on pattern
+            if e["pattern"] == "poison" and random.random() < 0.4:
+                e["poison_turns"] = 3
+                log.append(f"{e['name']} inflicts POISON!")
+
+            if e["pattern"] == "freeze" and random.random() < 0.25:
+                frozen_turn = True
+                log.append(f"{e['name']} FREEZES you!")
+
+            e["sprite"].move_to(300, 280)
+            wait_for_movement([player_sprite, e["sprite"]], 400)
+
+            if defend_bonus > 0 and not frozen_turn:
+                defense_check = (player_stats["def"] + defend_bonus) - actual_atk
+                if defense_check >= 0:
+                    log.append(f"{e['name']}: Armor absorbs the hit!")
+                else:
+                    dmg = abs(defense_check)
+                    player_stats["hp"] -= dmg
+                    play_sound("player_hurt")
+                    log.append(f"{e['name']} cracked armor! Took {dmg}!")
+                    shake_timer = 0.2
+            else:
+                player_stats["hp"] -= actual_atk
+                play_sound("player_hurt")
+                player_sprite.set_sheet(spr_player_hurt)
+                log.append(f"{e['name']} hits for {actual_atk}!")
+                shake_timer = 0.2
+
+            # Move enemy back
+            e["sprite"].move_to(e["sprite"].target_x, e["sprite"].target_y)
+            orig_x = e["sprite"].x
+            orig_y = e["sprite"].y
+            # Restore original position based on alive index
+            alive_list = [ae for ae in enemies if ae["hp"] > 0]
+            idx_in_alive = alive_list.index(e) if e in alive_list else 0
+            cnt = len(alive_list)
+            x_positions = {1: [SCREEN_W - 260], 2: [SCREEN_W - 320, SCREEN_W - 180],
+                           3: [SCREEN_W - 380, SCREEN_W - 240, SCREEN_W - 100]}
+            y_positions = {1: [260], 2: [230, 310], 3: [200, 280, 360]}
+            if cnt in x_positions and idx_in_alive < cnt:
+                e["sprite"].move_to(x_positions[cnt][idx_in_alive], y_positions[cnt][idx_in_alive])
+            wait_for_movement([player_sprite, e["sprite"]], 400)
+            e["sprite"].set_sheet(e["type"]["idle"])
+            player_sprite.set_sheet(spr_player_idle)
+
+    # Result
+    if player_stats["hp"] > 0:
+        return "victory"
+    else:
+        player_stats["hp"] = 0
+        return "defeat"
+
+
+def arcade_mode():
+    """Main arcade mode loop."""
+    global player_stats
+
+    # Reset stats for arcade
+    player_stats = copy.deepcopy(DEFAULT_PLAYER_STATS)
+    player_stats["hp"] = player_stats["max_hp"]
+    player_stats["def"] = player_stats["max_def"]
+
+    high_score, high_wave = arcade_get_highscore()
+
+    bg.set_static(load_bg("arcade"))
+    fade_transition(400)
+
+    typewriter([
+        "Welcome to the ARCADE!",
+        "Fight endless waves of monsters!",
+        "How long can you survive?",
+        f"High Score: {high_score} (Wave {high_wave})",
+    ], [player_sprite], narrator_visible=True)
+
+    wave = 0
+    score = 0
+
+    while player_stats["hp"] > 0:
+        wave += 1
+        enemies = spawn_arcade_wave(wave)
+
+        bg.set_static(load_bg("arcade"))
+        names = " + ".join(e["name"] for e in enemies)
+        show_message(f"WAVE {wave}: {names}", C_GOLD, 2000)
+
+        result = arcade_combat(wave, enemies)
+
+        if result == "menu":
+            arcade_save_highscore(score, wave - 1)
+            return
+
+        if result == "defeat":
+            play_sound("defeat")
+            bg.set_static(load_bg("gameover"))
+            final_hs = arcade_save_highscore(score, wave - 1)
+            typewriter([
+                f"{player_name} has fallen at Wave {wave}!",
+                f"Final Score: {score}",
+                f"High Score: {final_hs}",
+                "--- GAME OVER ---",
+            ], [], narrator_visible=False)
+            return
+
+        # Victory rewards
+        play_sound("victory")
+        wave_score = wave * 100 + len(enemies) * 50
+        score += wave_score
+        loot = drop_coins()
+        play_sound("coin")
+        leveled = gain_xp(30 + wave * 10)
+
+        lines = [
+            f"Wave {wave} cleared!",
+            f"+{wave_score} score (Total: {score})",
+            f"+{loot} coins",
+        ]
+        if leveled:
+            play_sound("level_up")
+            lines.append(f"LEVEL UP! Now Level {player_stats['level']}!")
+
+        bg.set_static(load_bg("arcade"))
+        typewriter(lines, [player_sprite], narrator_visible=False)
+
+        # Offer shop between waves
+        if wave % 2 == 0:
+            ch = show_menu(f"WAVE {wave} COMPLETE", ["Continue Fighting", "Visit Shop"])
+            if ch == 1:
+                shop_screen()
+        save_game()
+
+    # If somehow we exit the loop
+    arcade_save_highscore(score, wave)
 
 
 # ---------------------------------------------------------------------------
@@ -1221,6 +1738,8 @@ def title_screen():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit(); sys.exit()
+            if event.type == pygame.VIDEORESIZE:
+                handle_resize(event)
             if event.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
                 play_sound("menu_click"); return
 
@@ -1275,9 +1794,12 @@ def main():
         player_sprite.set_sheet(spr_player_idle)
         player_sprite.set_pos(SCREEN_W - 200, 380)
 
-        choice = show_menu(f"NABI  v{VERSION}", ["Start Adventure", "Quit Game"],
+        high_s, high_w = arcade_get_highscore()
+        hs_txt = f" | Arcade Best: {high_s} (W{high_w})" if high_s > 0 else ""
+        choice = show_menu(f"NABI  v{VERSION}",
+                           ["Start Adventure", "Arcade Mode", "Quit Game"],
                            [player_sprite, narrator_sprite],
-                           subtitle=f"Hero: {player_name} | Lv.{player_stats['level']}")
+                           subtitle=f"Hero: {player_name} | Lv.{player_stats['level']}{hs_txt}")
 
         if choice == 0:
             player_stats["hp"] = player_stats["max_hp"]
@@ -1290,6 +1812,8 @@ def main():
             save_game()
             scene_forest()
         elif choice == 1:
+            arcade_mode()
+        elif choice == 2:
             save_game(); play_sound("save")
             show_message("Thanks for playing Nabi! Goodbye.", C_GOLD, 2000)
             pygame.quit(); sys.exit()
