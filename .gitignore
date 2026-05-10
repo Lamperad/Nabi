@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+save_data.json
+tales/
+tales_index.json
