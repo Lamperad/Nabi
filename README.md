@@ -55,13 +55,45 @@ python nabi.py
 - **Keyboard** — press 1-8 to select menu options
 - **Cheats** — press K in combat to instant-kill, G for godmode
 
+## Build Standalone App
+
+Build a single executable that runs without Python installed:
+
+```bash
+pip install pyinstaller
+python build.py
+```
+
+This creates `dist/Nabi` (or `dist/Nabi.exe` on Windows). Double-click to play.
+
+For a folder build (faster startup, larger size):
+```bash
+python build.py --onedir
+```
+
+### Automated Builds
+
+Every GitHub release automatically builds executables for **Windows**, **macOS**, and **Linux**. Go to [Releases](../../releases) to download the latest build for your platform.
+
+To create a release:
+1. Go to your repo → Releases → "Draft a new release"
+2. Create a tag (e.g. `v3.0.0`)
+3. Publish — the GitHub Action will build and attach executables automatically
+
+You can also trigger a build manually from the Actions tab → "Build Nabi" → "Run workflow".
+
 ## File Structure
 
 ```
 nabi_gui.py        # Audiovisual game (Pygame)
 nabi.py            # Original text-based game
+build.py           # PyInstaller build script
+nabi.spec          # PyInstaller spec file
 requirements.txt   # Python dependencies
+.github/workflows/ # Auto-build on release
 assets/
+  avatars/         # Character sprite sheets
+  backgrounds/     # Scene background images
   sounds/          # Generated WAV sound effects
 save_data.json     # Player save file (auto-generated)
 ```

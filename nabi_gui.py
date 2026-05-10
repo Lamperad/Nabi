@@ -18,7 +18,11 @@ VERSION = "3.0.0"
 SAVE_FILE = "save_data.json"
 SCREEN_W, SCREEN_H = 960, 640
 FPS = 60
-ASSET_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+if getattr(sys, 'frozen', False):
+    _BASE_DIR = sys._MEIPASS
+else:
+    _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ASSET_DIR = os.path.join(_BASE_DIR, "assets")
 
 # Colours
 C_BG = (18, 18, 30)
