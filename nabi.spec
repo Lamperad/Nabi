@@ -13,6 +13,7 @@ a = Analysis(
         ('assets/avatars', 'assets/avatars'),
         ('assets/backgrounds', 'assets/backgrounds'),
         ('assets/sounds', 'assets/sounds'),
+        ('assets/icon.png', 'assets'),
     ],
     hiddenimports=[],
     hookspath=[],
@@ -45,6 +46,7 @@ exe = EXE(
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
+    icon='assets/icon.ico',
     codesign_identity=None,
     entitlements_file=None,
 )

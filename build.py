@@ -16,6 +16,8 @@ import os
 def main():
     onedir = "--onedir" in sys.argv
 
+    icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icon.ico")
+
     cmd = [
         sys.executable, "-m", "PyInstaller",
         "--name", "Nabi",
@@ -23,9 +25,13 @@ def main():
         "--add-data", f"assets/avatars{os.pathsep}assets/avatars",
         "--add-data", f"assets/backgrounds{os.pathsep}assets/backgrounds",
         "--add-data", f"assets/sounds{os.pathsep}assets/sounds",
+        "--add-data", f"assets/icon.png{os.pathsep}assets",
         "--clean",
         "-y",
     ]
+
+    if os.path.exists(icon_path):
+        cmd.extend(["--icon", icon_path])
 
     if onedir:
         cmd.append("--onedir")
