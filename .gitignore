@@ -8,3 +8,5 @@ tales_index.json
 build/
 dist/
 *.spec.bak
+version_info.json
+arcade_save.json

@@ -16,7 +16,26 @@ import os
 def main():
     onedir = "--onedir" in sys.argv
 
-    icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icon.ico")
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    icon_path = os.path.join(base_dir, "assets", "icon.ico")
+
+    # Generate version_info.json for the updater
+    import json
+    version_file = os.path.join(base_dir, "version_info.json")
+    try:
+        # Read VERSION from nabi_gui.py
+        with open(os.path.join(base_dir, "nabi_gui.py")) as f:
+            for line in f:
+                if line.startswith("VERSION"):
+                    ver = line.split("=")[1].strip().strip('"').strip("'")
+                    break
+            else:
+                ver = "0.0.0"
+        with open(version_file, "w") as f:
+            json.dump({"version": ver}, f)
+        print(f"Generated version_info.json (v{ver})")
+    except Exception as e:
+        print(f"Warning: Could not generate version_info.json: {e}")
 
     cmd = [
         sys.executable, "-m", "PyInstaller",
@@ -26,6 +45,9 @@ def main():
         "--add-data", f"assets/backgrounds{os.pathsep}assets/backgrounds",
         "--add-data", f"assets/sounds{os.pathsep}assets/sounds",
         "--add-data", f"assets/icon.png{os.pathsep}assets",
+        "--add-data", f"updater.py{os.pathsep}.",
+        "--add-data", f"version_info.json{os.pathsep}.",
+        "--hidden-import", "updater",
         "--clean",
         "-y",
     ]
