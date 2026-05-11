@@ -1,6 +1,6 @@
 # Nabi
 
-An audiovisual RPG built with Pygame. Explore the dark forest, confront Dan, and battle demons — all with graphics, sound effects, and animated UI.
+An audiovisual RPG built with Pygame. Explore the dark forest, confront Dan, and battle demons — all with graphics, sound effects, and animated UI. Releases are built automatically on every version update.
 
 ## Quick Start
 
