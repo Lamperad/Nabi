@@ -15,10 +15,10 @@ import math
 # ---------------------------------------------------------------------------
 #  CONSTANTS
 # ---------------------------------------------------------------------------
-VERSION = "4.1.0"
+VERSION = "4.2.0"
 SAVE_FILE = "save_data.json"
 ARCADE_SAVE_FILE = "arcade_save.json"
-SCREEN_W, SCREEN_H = 1280, 720
+SCREEN_W, SCREEN_H = 960, 640
 FPS = 60
 if getattr(sys, 'frozen', False):
     _BASE_DIR = sys._MEIPASS
@@ -586,8 +586,47 @@ class Button:
 # ---------------------------------------------------------------------------
 def handle_resize(event):
     global screen, SCREEN_W, SCREEN_H
-    SCREEN_W, SCREEN_H = max(800, event.w), max(600, event.h)
+    SCREEN_W, SCREEN_H = max(640, event.w), max(480, event.h)
     screen = pygame.display.set_mode((SCREEN_W, SCREEN_H), pygame.RESIZABLE)
+
+class PauseMenuExit(Exception):
+    """Raised when the player chooses to return to main menu from the pause menu."""
+    pass
+
+def pause_menu():
+    """Esc pause overlay. Returns 'resume' or raises PauseMenuExit."""
+    overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 150))
+    buttons = [
+        Button((SCREEN_W // 2 - 150, SCREEN_H // 2 - 70, 300, 44), "1. Resume", key=pygame.K_1),
+        Button((SCREEN_W // 2 - 150, SCREEN_H // 2 - 15, 300, 44), "2. Main Menu", key=pygame.K_2),
+        Button((SCREEN_W // 2 - 150, SCREEN_H // 2 + 40, 300, 44), "3. Quit Game", key=pygame.K_3),
+    ]
+    while True:
+        mouse_pos = pygame.mouse.get_pos()
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                save_game(); pygame.quit(); sys.exit()
+            if event.type == pygame.VIDEORESIZE:
+                handle_resize(event)
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                return "resume"
+            for i, btn in enumerate(buttons):
+                if btn.clicked(event):
+                    play_sound("menu_click")
+                    if i == 0:
+                        return "resume"
+                    elif i == 1:
+                        raise PauseMenuExit()
+                    elif i == 2:
+                        save_game(); pygame.quit(); sys.exit()
+        clock.tick(FPS)
+        screen.blit(overlay, (0, 0))
+        draw_text("PAUSED", font_xl, C_GOLD, SCREEN_W // 2, SCREEN_H // 2 - 120, "center")
+        for btn in buttons:
+            btn.update(mouse_pos)
+            btn.draw()
+        pygame.display.flip()
 
 def pump_events():
     for event in pygame.event.get():
@@ -597,6 +636,8 @@ def pump_events():
             sys.exit()
         if event.type == pygame.VIDEORESIZE:
             handle_resize(event)
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            pause_menu()
 
 def get_text_input(prompt, max_len=20):
     text = ""
@@ -666,11 +707,15 @@ def wait_for_movement(sprites, timeout=3000):
 
 
 def typewriter(lines, sprites=None, narrator_visible=True):
-    """Typewriter with animated sprites and background."""
+    """Typewriter with animated sprites and background. Tab skips all dialogue."""
     if sprites is None:
         sprites = []
     displayed = []
+    skip_all = False
     for line_text in lines:
+        if skip_all:
+            displayed.append(line_text)
+            continue
         displayed.append("")
         skip = False
         for i, ch in enumerate(line_text):
@@ -678,7 +723,16 @@ def typewriter(lines, sprites=None, narrator_visible=True):
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     save_game(); pygame.quit(); sys.exit()
-                if event.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_TAB:
+                    for j in range(len(displayed)):
+                        displayed[j] = lines[j] if j < len(lines) else displayed[j]
+                    displayed[-1] = line_text
+                    skip_all = True
+                    skip = True
+                    break
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    pause_menu()
+                elif event.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
                     displayed[-1] = line_text
                     skip = True
                     break
@@ -700,12 +754,17 @@ def typewriter(lines, sprites=None, narrator_visible=True):
                 play_sound("text_tick")
             pygame.time.delay(22)
 
+    if skip_all:
+        return
+
     # Wait for click
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 save_game(); pygame.quit(); sys.exit()
-            if event.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                pause_menu()
+            elif event.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
                 return
         dt = clock.tick(FPS) / 1000
         bg.update(dt)
@@ -718,7 +777,7 @@ def typewriter(lines, sprites=None, narrator_visible=True):
             narrator_sprite.draw(screen)
         draw_stat_panel(SCREEN_W - 290, 10)
         _render_tw_lines(displayed)
-        draw_text("[ Click or press any key ]", font_sm, C_TEXT_DIM, SCREEN_W // 2, SCREEN_H - 30, "center")
+        draw_text("[ Click or press any key | Tab to skip ]", font_sm, C_TEXT_DIM, SCREEN_W // 2, SCREEN_H - 30, "center")
         pygame.display.flip()
 
 
@@ -758,6 +817,8 @@ def show_menu(title, options, sprites=None, subtitle=""):
                     bx = SCREEN_W // 2 - bw // 2
                     by_pos = start_y + bi * (bh + 10)
                     buttons[bi].rect = pygame.Rect(bx, by_pos, bw, bh)
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                pause_menu()
             for i, btn in enumerate(buttons):
                 if btn.clicked(event):
                     play_sound("menu_click")
@@ -789,7 +850,9 @@ def show_message(text, color=C_TEXT, duration=0, sprites=None):
                 save_game(); pygame.quit(); sys.exit()
             if event.type == pygame.VIDEORESIZE:
                 handle_resize(event)
-            if duration == 0 and event.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                pause_menu()
+            elif duration == 0 and event.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
                 return
         if duration > 0 and pygame.time.get_ticks() - start > duration:
             return
@@ -1045,6 +1108,8 @@ def combat_screen(enemy_name):
                     save_game(); pygame.quit(); sys.exit()
                 if event.type == pygame.VIDEORESIZE:
                     handle_resize(event)
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    pause_menu()
                 for i, btn in enumerate(buttons):
                     if btn.clicked(event):
                         play_sound("menu_click"); action_idx = i; break
@@ -1356,6 +1421,8 @@ def arcade_combat(wave_num, enemies):
                         save_game(); pygame.quit(); sys.exit()
                     if event.type == pygame.VIDEORESIZE:
                         handle_resize(event)
+                    if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                        pause_menu()
                     for i, btn in enumerate(buttons):
                         if btn.clicked(event):
                             play_sound("menu_click"); action_idx = i; break
@@ -1644,9 +1711,12 @@ def arcade_mode():
 
         # Offer shop between waves
         if wave % 2 == 0:
-            ch = show_menu(f"WAVE {wave} COMPLETE", ["Continue Fighting", "Visit Shop"])
+            ch = show_menu(f"WAVE {wave} COMPLETE", ["Continue Fighting", "Visit Shop", "Quit Arcade"])
             if ch == 1:
                 shop_screen()
+            elif ch == 2:
+                arcade_save_highscore(score, wave)
+                return
         save_game()
 
     # If somehow we exit the loop
@@ -1692,12 +1762,15 @@ def scene_forest():
 
     while True:
         choice = show_menu("THE DARK FOREST",
-                           ["Go Right (Dan's Field)", "Go Left (Deep Forest)", "Shop"],
+                           ["Go Right (Dan's Field)", "Go Left (Deep Forest)", "Shop", "Leave Forest"],
                            [player_sprite],
                            subtitle="Two paths stretch before you...")
         save_game()
 
-        if choice == 2:
+        if choice == 3:
+            typewriter(["You decide to head back..."], [player_sprite])
+            return "menu"
+        elif choice == 2:
             typewriter(["Isn't it a bit early to be shopping?"], [player_sprite])
             continue
         elif choice == 1:
@@ -1748,7 +1821,7 @@ def scene_dan_field():
                 "A man tends to his crops, eyeing you suspiciously."],
                [player_sprite, dan_sprite])
 
-    choice = show_menu("DAN'S FIELD", ["Speak to Dan", "Go Back"], [player_sprite, dan_sprite])
+    choice = show_menu("DAN'S FIELD", ["Speak to Dan", "Go Back to Forest"], [player_sprite, dan_sprite])
 
     if choice == 1:
         dan_patience = 0
@@ -1782,7 +1855,8 @@ def scene_dan_field():
         "I'm looking for adventure",
         "Just passing through",
         "None of your business",
-        "I am lost and need help"
+        "I am lost and need help",
+        "Leave"
     ], [player_sprite, dan_sprite])
 
     if reason == 0:
@@ -1798,6 +1872,9 @@ def scene_dan_field():
         dan_sprite.set_sheet(spr_dan_idle)
     elif reason == 3:
         return scene_dan_option4()
+    elif reason == 4:
+        typewriter(["You decide to leave Dan alone."], [player_sprite, dan_sprite])
+        return None
 
     if dan_patience == 1:
         dan_sprite.set_sheet(spr_dan_angry)
@@ -1856,9 +1933,12 @@ def scene_dan_option4():
                 "Dan: How about you rest for the night first?"],
                [player_sprite, dan_sprite])
 
-    choice = show_menu("DAN'S OFFER", ["Accept Dan's offer", "Decline and continue"], [player_sprite, dan_sprite])
+    choice = show_menu("DAN'S OFFER", ["Accept Dan's offer", "Decline and continue", "Leave"], [player_sprite, dan_sprite])
 
-    if choice == 0:
+    if choice == 2:
+        typewriter(["You decide to leave Dan alone."], [player_sprite, dan_sprite])
+        return None
+    elif choice == 0:
         fade_transition(600)
         bg.set_static(load_bg("gameover"))
         typewriter(["You accept Dan's offer and spend the night...",
@@ -1883,8 +1963,8 @@ def scene_dan_option4():
         animate_frames(1500, draw_t2)
         dan_sprite.set_sheet(spr_demon_idle)
 
-        fight = show_menu("FIGHT THE DEMON?", ["Yes, fight!", "No, flee!"], [player_sprite, dan_sprite])
-        if fight == 1:
+        fight = show_menu("FIGHT THE DEMON?", ["Yes, fight!", "No, flee!", "Run away"], [player_sprite, dan_sprite])
+        if fight in (1, 2):
             player_sprite.set_sheet(spr_player_walk)
             player_sprite.flip_h = True
             player_sprite.move_to(-150, 380)
@@ -2020,25 +2100,29 @@ def main():
                            [player_sprite, narrator_sprite],
                            subtitle=f"Hero: {player_name} | Lv.{player_stats['level']}{hs_txt}")
 
-        if choice == 0:
-            player_stats["hp"] = player_stats["max_hp"]
-            player_stats["def"] = player_stats["max_def"]
-            player_stats["combo"] = 0
+        try:
+            if choice == 0:
+                player_stats["hp"] = player_stats["max_hp"]
+                player_stats["def"] = player_stats["max_def"]
+                player_stats["combo"] = 0
+                save_game()
+                scene_intro()
+                want = show_menu("BEGIN YOUR ADVENTURE?", ["Yes!", "Not yet..."], [player_sprite])
+                if want == 1:
+                    typewriter(["Oh well, maybe next time!"], [player_sprite]); continue
+                save_game()
+                scene_forest()
+            elif choice == 1:
+                arcade_mode()
+            elif choice == 2:
+                check_updates_gui()
+            elif choice == 3:
+                save_game(); play_sound("save")
+                show_message("Thanks for playing Nabi! Goodbye.", C_GOLD, 2000)
+                pygame.quit(); sys.exit()
+        except PauseMenuExit:
             save_game()
-            scene_intro()
-            want = show_menu("BEGIN YOUR ADVENTURE?", ["Yes!", "Not yet..."], [player_sprite])
-            if want == 1:
-                typewriter(["Oh well, maybe next time!"], [player_sprite]); continue
-            save_game()
-            scene_forest()
-        elif choice == 1:
-            arcade_mode()
-        elif choice == 2:
-            check_updates_gui()
-        elif choice == 3:
-            save_game(); play_sound("save")
-            show_message("Thanks for playing Nabi! Goodbye.", C_GOLD, 2000)
-            pygame.quit(); sys.exit()
+            continue
 
 
 if __name__ == "__main__":
