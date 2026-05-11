@@ -1,8 +1,9 @@
-name: Auto Release
+name: Auto Release & Build
 
 on:
   push:
     branches: [base]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -10,6 +11,9 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      created: ${{ steps.check.outputs.created }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,18 +31,71 @@ jobs:
         run: |
           TAG="v${{ steps.version.outputs.version }}"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "created=false" >> "$GITHUB_OUTPUT"
           else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
+            gh release create "$TAG" \
+              --title "Nabi $TAG" \
+              --generate-notes
+            echo "created=true" >> "$GITHUB_OUTPUT"
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create release
-        if: steps.check.outputs.exists == 'false'
+  build:
+    needs: release
+    if: needs.release.outputs.created == 'true' || github.event_name == 'workflow_dispatch'
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: Nabi-Windows
+            ext: .exe
+          - os: macos-latest
+            artifact: Nabi-macOS
+            ext: ""
+          - os: ubuntu-latest
+            artifact: Nabi-Linux
+            ext: ""
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
         run: |
-          gh release create "${{ steps.version.outputs.tag }}" \
-            --title "Nabi ${{ steps.version.outputs.tag }}" \
-            --generate-notes
+          python -m pip install --upgrade pip
+          pip install pygame pyinstaller
+
+      - name: Install Linux display dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev
+
+      - name: Build executable
+        run: python build.py
+
+      - name: Rename artifact (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: mv dist/Nabi dist/${{ matrix.artifact }}
+
+      - name: Rename artifact (Windows)
+        if: runner.os == 'Windows'
+        run: mv dist/Nabi.exe dist/${{ matrix.artifact }}.exe
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}*
+
+      - name: Upload to release
+        run: |
+          gh release upload "${{ needs.release.outputs.tag }}" dist/${{ matrix.artifact }}* --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
