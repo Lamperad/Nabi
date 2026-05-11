@@ -15,7 +15,7 @@ import math
 # ---------------------------------------------------------------------------
 #  CONSTANTS
 # ---------------------------------------------------------------------------
-VERSION = "4.2.0"
+VERSION = "4.2.1"
 SAVE_FILE = "save_data.json"
 ARCADE_SAVE_FILE = "arcade_save.json"
 SCREEN_W, SCREEN_H = 960, 640
@@ -2047,7 +2047,7 @@ def check_updates_gui():
                        subtitle=f"Current: v{VERSION} | {release_name}")
         if ch == 0:
             show_message("Updating... please wait", C_BLUE, 500)
-            if check_for_updates(VERSION, headless=False):
+            if check_for_updates(VERSION, headless=True):
                 show_message("Update complete! Please restart Nabi.", C_GREEN, 3000)
             else:
                 show_message("Update failed. Try again later.", C_RED, 2000)
