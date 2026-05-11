@@ -15,7 +15,7 @@ import math
 # ---------------------------------------------------------------------------
 #  CONSTANTS
 # ---------------------------------------------------------------------------
-VERSION = "4.0.0"
+VERSION = "4.1.0"
 SAVE_FILE = "save_data.json"
 ARCADE_SAVE_FILE = "arcade_save.json"
 SCREEN_W, SCREEN_H = 1280, 720
@@ -47,13 +47,16 @@ C_DP_BAR = (50, 120, 200)
 C_DP_BG = (20, 40, 60)
 C_XP_BAR = (200, 180, 50)
 C_XP_BG = (50, 45, 15)
+C_COMBO_BAR = (220, 120, 220)
+C_COMBO_BG = (50, 25, 50)
+C_VULN = (255, 80, 80)
 
 # ---------------------------------------------------------------------------
 #  GAME STATE
 # ---------------------------------------------------------------------------
 DEFAULT_PLAYER_STATS = {
     "hp": 100, "max_hp": 100, "atk": 20, "def": 15, "max_def": 15,
-    "coins": 0, "level": 1, "xp": 0, "cowardice": 0,
+    "coins": 0, "level": 1, "xp": 0, "cowardice": 0, "combo": 0,
     "inventory": {"hp_potions": 2, "dp_potions": 2}
 }
 player_stats = copy.deepcopy(DEFAULT_PLAYER_STATS)
@@ -113,8 +116,83 @@ def gain_xp(amount):
         player_stats["atk"] += 5
         player_stats["max_def"] += 5
         player_stats["def"] = player_stats["max_def"]
+        player_stats["combo"] = 0
         leveled = True
     return leveled
+
+
+# ---------------------------------------------------------------------------
+#  DP SYSTEM — Shield HP / Durability / Parry / Combo / Stamina
+# ---------------------------------------------------------------------------
+COMBO_MAX = 100
+COMBO_PER_ATTACK = 25
+POWER_STRIKE_DP_COST = 10
+POWER_STRIKE_MULTIPLIER = 2.5
+VULNERABILITY_BONUS = 0.5
+PARRY_DP_RESTORE = 5
+PARRY_COUNTER_MULTIPLIER = 0.5
+
+def apply_damage_to_player(raw_damage, log, source_name="Enemy"):
+    """Shield HP system: DP absorbs damage first, overflow hits HP.
+    At 0 DP, player takes 50% bonus damage (vulnerability)."""
+    if player_stats["def"] <= 0:
+        vuln_dmg = int(raw_damage * (1 + VULNERABILITY_BONUS))
+        player_stats["hp"] -= vuln_dmg
+        log.append(f"VULNERABLE! {source_name} deals {vuln_dmg} ({raw_damage}+{vuln_dmg - raw_damage})!")
+        return vuln_dmg
+    if raw_damage <= player_stats["def"]:
+        player_stats["def"] -= raw_damage
+        log.append(f"Shield absorbs {raw_damage}! (DP: {player_stats['def']}/{player_stats['max_def']})")
+        return 0
+    overflow = raw_damage - player_stats["def"]
+    log.append(f"Shield broken! {player_stats['def']} absorbed, {overflow} HP lost!")
+    player_stats["def"] = 0
+    player_stats["hp"] -= overflow
+    return overflow
+
+def apply_parry(enemy_atk, enemy_max_atk, log, source_name="Enemy"):
+    """Defend = Parry. Restores some DP. If enemy attack is strong, counter-attacks."""
+    dp_restored = min(PARRY_DP_RESTORE, player_stats["max_def"] - player_stats["def"])
+    player_stats["def"] += dp_restored
+    reduced_dmg = max(0, enemy_atk - player_stats["def"])
+    if reduced_dmg > 0:
+        player_stats["def"] = 0
+        player_stats["hp"] -= reduced_dmg
+        log.append(f"Parried! DP +{dp_restored}, but took {reduced_dmg} overflow!")
+    else:
+        player_stats["def"] -= enemy_atk
+        log.append(f"Parried! DP +{dp_restored}, shield holds! (DP: {player_stats['def']})")
+    counter_dmg = 0
+    is_strong = enemy_atk >= enemy_max_atk * 0.7
+    if is_strong:
+        counter_dmg = int(player_stats["atk"] * PARRY_COUNTER_MULTIPLIER)
+        log.append(f"COUNTER-ATTACK! You strike back for {counter_dmg}!")
+    return counter_dmg
+
+def add_combo(amount=COMBO_PER_ATTACK):
+    player_stats["combo"] = min(COMBO_MAX, player_stats["combo"] + amount)
+
+def can_power_strike():
+    return player_stats["combo"] >= COMBO_MAX and player_stats["def"] >= POWER_STRIKE_DP_COST
+
+def do_power_strike(log):
+    """Spend combo + DP for massive damage."""
+    player_stats["combo"] = 0
+    player_stats["def"] -= POWER_STRIKE_DP_COST
+    dmg = int(player_stats["atk"] * POWER_STRIKE_MULTIPLIER)
+    log.append(f"POWER STRIKE! -{POWER_STRIKE_DP_COST} DP, deals {dmg} damage!")
+    return dmg
+
+def can_shield_restore():
+    return player_stats["combo"] >= COMBO_MAX
+
+def do_shield_restore(log):
+    """Spend combo to fully restore DP."""
+    player_stats["combo"] = 0
+    old_dp = player_stats["def"]
+    player_stats["def"] = player_stats["max_def"]
+    restored = player_stats["def"] - old_dp
+    log.append(f"SHIELD RESTORE! DP fully repaired (+{restored})!")
 
 
 # ---------------------------------------------------------------------------
@@ -435,20 +513,27 @@ def draw_bar(x, y, w, h, current, maximum, bar_color, bg_color, label=""):
         screen.blit(txt, (x + 4, y + (h - txt.get_height()) // 2))
 
 def draw_stat_panel(x, y):
-    w, h = 280, 170
+    w, h = 280, 210
     draw_panel((x, y, w, h), fill=C_PANEL)
     ny = y + 8
     draw_text(f"{player_name}  Lv.{player_stats['level']}", font_md, C_GOLD, x + 10, ny)
     ny += 28
-    draw_bar(x + 10, ny, w - 20, 20, player_stats['hp'], player_stats['max_hp'], C_HP_BAR, C_HP_BG,
-             f"HP {player_stats['hp']}/{player_stats['max_hp']}")
+    draw_bar(x + 10, ny, w - 20, 20, max(0, player_stats['hp']), player_stats['max_hp'], C_HP_BAR, C_HP_BG,
+             f"HP {max(0,player_stats['hp'])}/{player_stats['max_hp']}")
     ny += 26
-    draw_bar(x + 10, ny, w - 20, 20, player_stats['def'], player_stats['max_def'], C_DP_BAR, C_DP_BG,
-             f"DP {player_stats['def']}/{player_stats['max_def']}")
+    dp_color = C_VULN if player_stats['def'] <= 0 else C_DP_BAR
+    dp_label = "DP VULNERABLE!" if player_stats['def'] <= 0 else f"DP {player_stats['def']}/{player_stats['max_def']}"
+    draw_bar(x + 10, ny, w - 20, 20, max(0, player_stats['def']), player_stats['max_def'], dp_color, C_DP_BG,
+             dp_label)
     ny += 26
-    draw_bar(x + 10, ny, w - 20, 16, player_stats['xp'], 100, C_XP_BAR, C_XP_BG,
-             f"XP {player_stats['xp']}/100")
+    combo = player_stats.get('combo', 0)
+    combo_label = "COMBO READY!" if combo >= COMBO_MAX else f"Combo {combo}/{COMBO_MAX}"
+    combo_color = C_GOLD if combo >= COMBO_MAX else C_COMBO_BAR
+    draw_bar(x + 10, ny, w - 20, 16, combo, COMBO_MAX, combo_color, C_COMBO_BG, combo_label)
     ny += 22
+    draw_bar(x + 10, ny, w - 20, 14, player_stats['xp'], 100, C_XP_BAR, C_XP_BG,
+             f"XP {player_stats['xp']}/100")
+    ny += 20
     draw_text(f"ATK: {player_stats['atk']}  Coins: {player_stats['coins']}/500", font_sm, C_TEXT_DIM, x + 10, ny)
     ny += 18
     inv = player_stats['inventory']
@@ -748,12 +833,13 @@ def shop_screen():
     bg.set_static(load_bg("shop"))
     items = [
         ("[RESTORE] Full HP", 20, "hp_restore"),
-        ("[REPAIR] Full DP", 20, "dp_restore"),
+        ("[REPAIR] Full Shield/DP", 20, "dp_restore"),
         ("[BUFF] ATK +5", 100, "atk_buff"),
-        ("[BUFF] Max DP +5", 100, "dp_buff"),
+        ("[BUFF] Max Shield +5", 100, "dp_buff"),
         ("[BUY] HP Potion", 50, "hp_pot"),
-        ("[BUY] DP Potion", 50, "dp_pot"),
+        ("[BUY] Shield Potion", 50, "dp_pot"),
         ("[UPGRADE] Max HP +20", 150, "hp_upgrade"),
+        ("[UPGRADE] Max Shield +10", 120, "dp_upgrade"),
         ("[EXIT] Leave Shop", 0, "exit"),
     ]
     while True:
@@ -772,21 +858,24 @@ def shop_screen():
         if action == "hp_restore":
             player_stats["hp"] = player_stats["max_hp"]; msg = "Health fully restored!"
         elif action == "dp_restore":
-            player_stats["def"] = player_stats["max_def"]; msg = "Armor fully repaired!"
+            player_stats["def"] = player_stats["max_def"]; msg = "Shield fully repaired!"
         elif action == "atk_buff":
             player_stats["atk"] += 5; msg = f"ATK is now {player_stats['atk']}!"
         elif action == "dp_buff":
             player_stats["max_def"] += 5; player_stats["def"] = player_stats["max_def"]
-            msg = f"Max DP is now {player_stats['max_def']}!"
+            msg = f"Max Shield is now {player_stats['max_def']}!"
         elif action == "hp_pot":
             player_stats["inventory"]["hp_potions"] += 1
             msg = f"HP Potion added! ({player_stats['inventory']['hp_potions']})"
         elif action == "dp_pot":
             player_stats["inventory"]["dp_potions"] += 1
-            msg = f"DP Potion added! ({player_stats['inventory']['dp_potions']})"
+            msg = f"Shield Potion added! ({player_stats['inventory']['dp_potions']})"
         elif action == "hp_upgrade":
             player_stats["max_hp"] += 20; player_stats["hp"] += 20
             msg = f"Max HP is now {player_stats['max_hp']}!"
+        elif action == "dp_upgrade":
+            player_stats["max_def"] += 10; player_stats["def"] = player_stats["max_def"]
+            msg = f"Max Shield is now {player_stats['max_def']}!"
         show_message(msg, C_GREEN, 1500)
 
 
@@ -825,7 +914,7 @@ def loot_box_screen(is_cursed=False):
             color = C_GOLD
         elif roll == 3:
             player_stats["max_def"] += 10; player_stats["def"] = player_stats["max_def"]
-            msg, color = f"Defense Upgrade! Max DP {player_stats['max_def']}", C_BLUE
+            msg, color = f"Shield Upgrade! Max DP {player_stats['max_def']}", C_BLUE
         else:
             if player_stats["cowardice"] > 0:
                 player_stats["cowardice"] = 0; msg, color = "Holy Relic! Cowardice removed!", C_GOLD
@@ -855,9 +944,10 @@ def cheat_menu(log, enemies=None):
     cheats = [
         "Kill All Enemies",
         "Godmode (999 HP/ATK/DEF)",
-        "Full Heal",
+        "Full Heal + Shield",
         "Max Coins (500)",
         "Level Up",
+        "Max Combo",
         "Back",
     ]
     ch = show_menu("CHEAT CODES", cheats)
@@ -871,12 +961,13 @@ def cheat_menu(log, enemies=None):
         player_stats["hp"] = player_stats["max_hp"] = 999
         player_stats["atk"] = 999
         player_stats["def"] = player_stats["max_def"] = 999
+        player_stats["combo"] = COMBO_MAX
         log.append("[CHEAT] GODMODE activated!")
         return "godmode"
     elif ch == 2:
         player_stats["hp"] = player_stats["max_hp"]
         player_stats["def"] = player_stats["max_def"]
-        log.append("[CHEAT] Fully healed!")
+        log.append("[CHEAT] Fully healed + shield restored!")
         return "heal"
     elif ch == 3:
         player_stats["coins"] = 500
@@ -887,6 +978,10 @@ def cheat_menu(log, enemies=None):
         gain_xp(0)
         log.append(f"[CHEAT] Level Up! Now Lv.{player_stats['level']}")
         return "levelup"
+    elif ch == 5:
+        player_stats["combo"] = COMBO_MAX
+        log.append("[CHEAT] Combo meter maxed!")
+        return "combo"
     return "back"
 
 
@@ -902,6 +997,7 @@ def combat_screen(enemy_name):
     e_hp = int(random.randint(50 + lvl_bonus, 100 + lvl_bonus) * c_mult)
     e_max_hp = e_hp
     e_atk = int(random.randint(15 + player_stats["level"], 25 + player_stats["level"] * 2) * c_mult)
+    e_max_atk = e_atk
     e_dp = int(random.randint(5 + player_stats["level"], 15 + player_stats["level"]) * c_mult)
 
     is_demon = "demon" in enemy_name.lower()
@@ -923,16 +1019,23 @@ def combat_screen(enemy_name):
     shake_timer = 0
 
     while player_stats["hp"] > 0 and e_hp > 0:
-        actions = ["Attack", "Defend", "Use Item", "Run", "Shop", "Cheats", "Quit"]
+        # Build action list — add Special when combo is ready
+        actions = ["Attack", "Parry", "Use Item", "Run", "Shop", "Cheats"]
+        if player_stats.get("combo", 0) >= COMBO_MAX:
+            actions.insert(3, "Special")
+        actions.append("Quit")
+
         buttons = []
+        key_list = [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4,
+                    pygame.K_5, pygame.K_6, pygame.K_7, pygame.K_8, pygame.K_9]
         for i, act in enumerate(actions):
-            key_map = {0: pygame.K_1, 1: pygame.K_2, 2: pygame.K_3,
-                       3: pygame.K_4, 4: pygame.K_5, 5: pygame.K_6, 6: pygame.K_7}
-            bw, bh = 130, 38
+            bw, bh = 120, 38
             col_i = i % 4; row_i = i // 4
             bx = 30 + col_i * (bw + 8)
             by = SCREEN_H - 100 + row_i * (bh + 8)
-            buttons.append(Button((bx, by, bw, bh), f"{i+1}.{act}", font=font_sm, key=key_map.get(i)))
+            btn_color = C_GOLD if act == "Special" else C_PANEL_LIGHT
+            buttons.append(Button((bx, by, bw, bh), f"{i+1}.{act}", font=font_sm,
+                                  color=btn_color, key=key_list[i] if i < len(key_list) else None))
 
         action_idx = None
         while action_idx is None:
@@ -982,50 +1085,83 @@ def combat_screen(enemy_name):
                 btn.update(mouse_pos); btn.draw()
             pygame.display.flip()
 
-        if action_idx == 6:  # Quit
+        chosen_action = actions[action_idx]
+
+        if chosen_action == "Quit":
             return "menu"
 
-        if action_idx == 5:  # Cheats
+        if chosen_action == "Cheats":
             cheat_result = cheat_menu(log)
             if cheat_result == "kill":
                 e_hp = 0; break
             bg.set_static(load_bg("combat"))
             continue
 
-        defend_bonus = 0
+        did_parry = False
 
-        if action_idx == 0:  # Attack
+        if chosen_action == "Attack":
             play_sound("attack_hit")
             player_sprite.set_sheet(spr_player_attack)
             player_sprite.move_to(350, 280)
             wait_for_movement([player_sprite, enemy_sprite], 500)
             e_hp -= player_stats["atk"]
-            log.append(f"You strike for {player_stats['atk']} damage!")
+            add_combo()
+            log.append(f"You strike for {player_stats['atk']}! Combo +{COMBO_PER_ATTACK}")
             player_sprite.move_to(150, 280)
             player_sprite.set_sheet(spr_player_idle)
             shake_timer = 0.3
 
-        elif action_idx == 1:  # Defend
-            defend_bonus = 10
+        elif chosen_action == "Parry":
+            did_parry = True
             play_sound("defend")
             player_sprite.set_sheet(spr_player_defend)
-            log.append("You brace yourself!")
+            log.append("You raise your guard!")
 
-        elif action_idx == 2:  # Items
+        elif chosen_action == "Special":
+            spec_ch = show_menu("COMBO SPECIAL", [
+                f"Power Strike (2.5x ATK, costs {POWER_STRIKE_DP_COST} DP)",
+                "Shield Restore (full DP repair)",
+                "Back",
+            ])
+            if spec_ch == 0:
+                if can_power_strike():
+                    play_sound("attack_hit")
+                    player_sprite.set_sheet(spr_player_attack)
+                    player_sprite.move_to(350, 280)
+                    wait_for_movement([player_sprite, enemy_sprite], 500)
+                    dmg = do_power_strike(log)
+                    e_hp -= dmg
+                    player_sprite.move_to(150, 280)
+                    player_sprite.set_sheet(spr_player_idle)
+                    shake_timer = 0.5
+                else:
+                    log.append(f"Need {POWER_STRIKE_DP_COST} DP for Power Strike!")
+                    continue
+            elif spec_ch == 1:
+                if can_shield_restore():
+                    do_shield_restore(log)
+                    play_sound("potion")
+                else:
+                    log.append("Combo not ready!")
+                    continue
+            else:
+                continue
+
+        elif chosen_action == "Use Item":
             hp_c = player_stats["inventory"]["hp_potions"]
             dp_c = player_stats["inventory"]["dp_potions"]
-            ch = show_menu("USE ITEM", [f"HP Potion ({hp_c})", f"DP Potion ({dp_c})", "Back"])
+            ch = show_menu("USE ITEM", [f"HP Potion ({hp_c})", f"Shield Potion ({dp_c})", "Back"])
             if ch == 0 and hp_c > 0:
                 play_sound("potion"); player_stats["hp"] = player_stats["max_hp"]
                 player_stats["inventory"]["hp_potions"] -= 1; log.append("Used HP Potion!"); continue
             elif ch == 1 and dp_c > 0:
                 play_sound("potion"); player_stats["def"] = player_stats["max_def"]
-                player_stats["inventory"]["dp_potions"] -= 1; log.append("Used DP Potion!"); continue
+                player_stats["inventory"]["dp_potions"] -= 1; log.append("Shield restored!"); continue
             elif ch in (0, 1):
                 play_sound("error"); show_message("No potions!", C_RED, 1000)
             continue
 
-        elif action_idx == 3:  # Run
+        elif chosen_action == "Run":
             if random.random() < 0.5:
                 play_sound("flee")
                 player_stats["cowardice"] = player_stats.get("cowardice", 0) + 1
@@ -1036,7 +1172,7 @@ def combat_screen(enemy_name):
             else:
                 log.append(f"Failed to escape! {enemy_name} blocks you!")
 
-        elif action_idx == 4:  # Shop
+        elif chosen_action == "Shop":
             shop_screen(); bg.set_static(load_bg("combat")); continue
 
         # Enemy turn
@@ -1045,20 +1181,19 @@ def combat_screen(enemy_name):
             enemy_sprite.move_to(350, 280)
             wait_for_movement([player_sprite, enemy_sprite], 500)
 
-            if action_idx == 1:
-                defense_check = (player_stats["def"] + defend_bonus) - e_atk
-                if defense_check >= 0:
-                    log.append("Armor absorbs the hit!")
-                else:
-                    dmg = abs(defense_check); player_stats["hp"] -= dmg
-                    play_sound("player_hurt"); log.append(f"Armor cracked! Took {dmg} damage!")
+            if did_parry:
+                counter_dmg = apply_parry(e_atk, e_max_atk, log, enemy_name)
+                if counter_dmg > 0:
+                    e_hp -= counter_dmg
+                    shake_timer = 0.3
+                if player_stats["hp"] < player_stats["max_hp"]:
+                    play_sound("player_hurt")
                     shake_timer = 0.3
                 player_sprite.set_sheet(spr_player_idle)
             else:
-                player_stats["hp"] -= e_atk
                 play_sound("player_hurt")
+                apply_damage_to_player(e_atk, log, enemy_name)
                 player_sprite.set_sheet(spr_player_hurt)
-                log.append(f"{enemy_name} hits for {e_atk} damage!")
                 shake_timer = 0.3
 
             enemy_sprite.move_to(SCREEN_W - 300, 280)
@@ -1147,7 +1282,7 @@ def spawn_arcade_wave(wave_num):
         enemies.append({
             "name": mtype["name"],
             "type": mtype,
-            "hp": hp, "max_hp": hp, "atk": atk, "def": dp,
+            "hp": hp, "max_hp": hp, "atk": atk, "max_atk": atk, "def": dp,
             "sprite": sprite,
             "pattern": mtype["pattern"],
             "color": mtype["color"],
@@ -1175,12 +1310,11 @@ def arcade_combat(wave_num, enemies):
     while player_stats["hp"] > 0 and any(e["hp"] > 0 for e in enemies):
         alive_enemies = [e for e in enemies if e["hp"] > 0]
 
-        # Poison tick
+        # Poison tick — damage goes through shield system
         for e in alive_enemies:
             if e.get("poison_turns", 0) > 0:
                 poison_dmg = max(1, e["atk"] // 4)
-                player_stats["hp"] -= poison_dmg
-                log.append(f"Poison from {e['name']}: -{poison_dmg} HP!")
+                apply_damage_to_player(poison_dmg, log, f"Poison({e['name']})")
                 e["poison_turns"] -= 1
 
         if player_stats["hp"] <= 0:
@@ -1197,16 +1331,22 @@ def arcade_combat(wave_num, enemies):
                 target_names = [f"{e['name']} (HP:{e['hp']})" for e in alive_enemies]
                 target_idx = show_menu("SELECT TARGET", target_names)
 
-            actions = ["Attack", "Defend", "Use Item", "Shop", "Cheats", "Quit"]
+            actions = ["Attack", "Parry", "Use Item", "Shop", "Cheats"]
+            if player_stats.get("combo", 0) >= COMBO_MAX:
+                actions.insert(3, "Special")
+            actions.append("Quit")
+
             buttons = []
+            key_list = [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4,
+                        pygame.K_5, pygame.K_6, pygame.K_7, pygame.K_8]
             for i, act in enumerate(actions):
-                key_map = {0: pygame.K_1, 1: pygame.K_2, 2: pygame.K_3,
-                           3: pygame.K_4, 4: pygame.K_5, 5: pygame.K_6}
-                bw, bh = 130, 38
-                col_i = i % 3; row_i = i // 3
+                bw, bh = 120, 38
+                col_i = i % 4; row_i = i // 4
                 bx = 30 + col_i * (bw + 8)
                 by = SCREEN_H - 100 + row_i * (bh + 8)
-                buttons.append(Button((bx, by, bw, bh), f"{i+1}.{act}", font=font_sm, key=key_map.get(i)))
+                btn_color = C_GOLD if act == "Special" else C_PANEL_LIGHT
+                buttons.append(Button((bx, by, bw, bh), f"{i+1}.{act}", font=font_sm,
+                                      color=btn_color, key=key_list[i] if i < len(key_list) else None))
 
             action_idx = None
             while action_idx is None:
@@ -1267,10 +1407,12 @@ def arcade_combat(wave_num, enemies):
                     btn.update(mouse_pos); btn.draw()
                 pygame.display.flip()
 
-            if action_idx == 5:  # Quit
+            chosen_action = actions[action_idx]
+
+            if chosen_action == "Quit":
                 return "menu"
 
-            if action_idx == 4:  # Cheats
+            if chosen_action == "Cheats":
                 cheat_result = cheat_menu(log, enemies=alive_enemies)
                 if cheat_result == "kill":
                     for e in enemies:
@@ -1280,15 +1422,16 @@ def arcade_combat(wave_num, enemies):
                 continue
 
             target_enemy = alive_enemies[target_idx]
-            defend_bonus = 0
+            did_parry = False
 
-            if action_idx == 0:  # Attack
+            if chosen_action == "Attack":
                 play_sound("attack_hit")
                 player_sprite.set_sheet(spr_player_attack)
                 player_sprite.move_to(target_enemy["sprite"].x - 80, target_enemy["sprite"].y)
                 wait_for_movement([player_sprite] + [e["sprite"] for e in alive_enemies], 500)
                 target_enemy["hp"] -= player_stats["atk"]
-                log.append(f"You strike {target_enemy['name']} for {player_stats['atk']}!")
+                add_combo()
+                log.append(f"You strike {target_enemy['name']} for {player_stats['atk']}! Combo +{COMBO_PER_ATTACK}")
                 if target_enemy["hp"] <= 0:
                     log.append(f"{target_enemy['name']} defeated!")
                     target_enemy["sprite"].visible = False
@@ -1296,27 +1439,60 @@ def arcade_combat(wave_num, enemies):
                 player_sprite.set_sheet(spr_player_idle)
                 shake_timer = 0.3
 
-            elif action_idx == 1:  # Defend
-                defend_bonus = 10
+            elif chosen_action == "Parry":
+                did_parry = True
                 play_sound("defend")
                 player_sprite.set_sheet(spr_player_defend)
-                log.append("You brace yourself!")
+                log.append("You raise your guard!")
 
-            elif action_idx == 2:  # Items
+            elif chosen_action == "Special":
+                spec_ch = show_menu("COMBO SPECIAL", [
+                    f"Power Strike (2.5x ATK, costs {POWER_STRIKE_DP_COST} DP)",
+                    "Shield Restore (full DP repair)",
+                    "Back",
+                ])
+                if spec_ch == 0:
+                    if can_power_strike():
+                        play_sound("attack_hit")
+                        player_sprite.set_sheet(spr_player_attack)
+                        player_sprite.move_to(target_enemy["sprite"].x - 80, target_enemy["sprite"].y)
+                        wait_for_movement([player_sprite] + [e["sprite"] for e in alive_enemies], 500)
+                        dmg = do_power_strike(log)
+                        target_enemy["hp"] -= dmg
+                        if target_enemy["hp"] <= 0:
+                            log.append(f"{target_enemy['name']} defeated!")
+                            target_enemy["sprite"].visible = False
+                        player_sprite.move_to(120, 280)
+                        player_sprite.set_sheet(spr_player_idle)
+                        shake_timer = 0.5
+                    else:
+                        log.append(f"Need {POWER_STRIKE_DP_COST} DP for Power Strike!")
+                        continue
+                elif spec_ch == 1:
+                    if can_shield_restore():
+                        do_shield_restore(log)
+                        play_sound("potion")
+                    else:
+                        log.append("Combo not ready!")
+                        continue
+                else:
+                    continue
+
+            elif chosen_action == "Use Item":
                 hp_c = player_stats["inventory"]["hp_potions"]
                 dp_c = player_stats["inventory"]["dp_potions"]
-                ch = show_menu("USE ITEM", [f"HP Potion ({hp_c})", f"DP Potion ({dp_c})", "Back"])
+                ch = show_menu("USE ITEM", [f"HP Potion ({hp_c})", f"Shield Potion ({dp_c})", "Back"])
                 if ch == 0 and hp_c > 0:
                     play_sound("potion"); player_stats["hp"] = player_stats["max_hp"]
                     player_stats["inventory"]["hp_potions"] -= 1; log.append("Used HP Potion!"); continue
                 elif ch == 1 and dp_c > 0:
                     play_sound("potion"); player_stats["def"] = player_stats["max_def"]
-                    player_stats["inventory"]["dp_potions"] -= 1; log.append("Used DP Potion!"); continue
+                    player_stats["inventory"]["dp_potions"] -= 1; log.append("Shield restored!"); continue
                 elif ch in (0, 1):
                     play_sound("error"); show_message("No potions!", C_RED, 1000)
                 continue
 
-            elif action_idx == 3:  # Shop
+            elif chosen_action == "Shop":
                 shop_screen(); bg.set_static(load_bg("arcade")); continue
 
         # Enemy turns
@@ -1354,28 +1530,25 @@ def arcade_combat(wave_num, enemies):
             e["sprite"].move_to(300, 280)
             wait_for_movement([player_sprite, e["sprite"]], 400)
 
-            if defend_bonus > 0 and not frozen_turn:
-                defense_check = (player_stats["def"] + defend_bonus) - actual_atk
-                if defense_check >= 0:
-                    log.append(f"{e['name']}: Armor absorbs the hit!")
-                else:
-                    dmg = abs(defense_check)
-                    player_stats["hp"] -= dmg
+            if did_parry and not frozen_turn:
+                e_max_a = e.get("max_atk", e["atk"])
+                counter_dmg = apply_parry(actual_atk, e_max_a, log, e["name"])
+                if counter_dmg > 0:
+                    e["hp"] -= counter_dmg
+                    if e["hp"] <= 0:
+                        log.append(f"{e['name']} defeated by counter!")
+                        e["sprite"].visible = False
+                    shake_timer = 0.2
+                if player_stats["hp"] < player_stats["max_hp"]:
                     play_sound("player_hurt")
-                    log.append(f"{e['name']} cracked armor! Took {dmg}!")
                     shake_timer = 0.2
             else:
-                player_stats["hp"] -= actual_atk
                 play_sound("player_hurt")
+                apply_damage_to_player(actual_atk, log, e["name"])
                 player_sprite.set_sheet(spr_player_hurt)
-                log.append(f"{e['name']} hits for {actual_atk}!")
                 shake_timer = 0.2
 
             # Move enemy back
-            e["sprite"].move_to(e["sprite"].target_x, e["sprite"].target_y)
-            orig_x = e["sprite"].x
-            orig_y = e["sprite"].y
-            # Restore original position based on alive index
             alive_list = [ae for ae in enemies if ae["hp"] > 0]
             idx_in_alive = alive_list.index(e) if e in alive_list else 0
             cnt = len(alive_list)
@@ -1384,6 +1557,8 @@ def arcade_combat(wave_num, enemies):
             y_positions = {1: [260], 2: [230, 310], 3: [200, 280, 360]}
             if cnt in x_positions and idx_in_alive < cnt:
                 e["sprite"].move_to(x_positions[cnt][idx_in_alive], y_positions[cnt][idx_in_alive])
+            else:
+                e["sprite"].move_to(SCREEN_W - 260, 260)
             wait_for_movement([player_sprite, e["sprite"]], 400)
             e["sprite"].set_sheet(e["type"]["idle"])
             player_sprite.set_sheet(spr_player_idle)
@@ -1404,6 +1579,7 @@ def arcade_mode():
     player_stats = copy.deepcopy(DEFAULT_PLAYER_STATS)
     player_stats["hp"] = player_stats["max_hp"]
     player_stats["def"] = player_stats["max_def"]
+    player_stats["combo"] = 0
 
     high_score, high_wave = arcade_get_highscore()
 
@@ -1769,8 +1945,51 @@ def title_screen():
         pygame.display.flip()
 
 
+def check_updates_gui():
+    """Check for updates using the updater module, with GUI feedback."""
+    try:
+        from updater import check_for_updates, fetch_latest_release, parse_version
+        show_message("Checking for updates...", C_BLUE, 1000)
+        release = fetch_latest_release()
+        if not release:
+            show_message("Could not reach update server.", C_RED, 2000)
+            return
+        tag = release.get("tag_name", "")
+        latest_ver = parse_version(tag)
+        current_ver = parse_version(VERSION)
+        if latest_ver <= current_ver:
+            show_message(f"You're up to date! (v{VERSION})", C_GREEN, 2000)
+            return
+        release_name = release.get("name", tag)
+        body = release.get("body", "")[:150]
+        ch = show_menu(f"UPDATE AVAILABLE: {tag}",
+                       ["Update Now", "Skip"],
+                       subtitle=f"Current: v{VERSION} | {release_name}")
+        if ch == 0:
+            show_message("Updating... please wait", C_BLUE, 500)
+            if check_for_updates(VERSION, headless=False):
+                show_message("Update complete! Please restart Nabi.", C_GREEN, 3000)
+            else:
+                show_message("Update failed. Try again later.", C_RED, 2000)
+    except ImportError:
+        show_message("Updater module not found.", C_RED, 2000)
+    except Exception as e:
+        show_message(f"Update error: {str(e)[:50]}", C_RED, 2000)
+
+
 def main():
     global player_name
+
+    # Auto-check for updates on startup (non-blocking on failure)
+    try:
+        from updater import fetch_latest_release, parse_version
+        release = fetch_latest_release()
+        if release:
+            tag = release.get("tag_name", "")
+            if parse_version(tag) > parse_version(VERSION):
+                pass  # Will show in menu as "Check for Updates (NEW!)"
+    except Exception:
+        pass
 
     title_screen()
 
@@ -1797,13 +2016,14 @@ def main():
         high_s, high_w = arcade_get_highscore()
         hs_txt = f" | Arcade Best: {high_s} (W{high_w})" if high_s > 0 else ""
         choice = show_menu(f"NABI  v{VERSION}",
-                           ["Start Adventure", "Arcade Mode", "Quit Game"],
+                           ["Start Adventure", "Arcade Mode", "Check for Updates", "Quit Game"],
                            [player_sprite, narrator_sprite],
                            subtitle=f"Hero: {player_name} | Lv.{player_stats['level']}{hs_txt}")
 
         if choice == 0:
             player_stats["hp"] = player_stats["max_hp"]
             player_stats["def"] = player_stats["max_def"]
+            player_stats["combo"] = 0
             save_game()
             scene_intro()
             want = show_menu("BEGIN YOUR ADVENTURE?", ["Yes!", "Not yet..."], [player_sprite])
@@ -1814,6 +2034,8 @@ def main():
         elif choice == 1:
             arcade_mode()
         elif choice == 2:
+            check_updates_gui()
+        elif choice == 3:
             save_game(); play_sound("save")
             show_message("Thanks for playing Nabi! Goodbye.", C_GOLD, 2000)
             pygame.quit(); sys.exit()

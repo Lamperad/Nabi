@@ -4,7 +4,7 @@ import sys
 import random
 import copy
 
-VERSION = "2.1.0"
+VERSION = "4.1.0"
 SAVE_FILE = "save_data.json"
 name = " "
 dan_patience = 0
@@ -19,8 +19,18 @@ DEFAULT_PLAYER_STATS = {
     "level": 1,
     "xp": 0,
     "cowardice": 0,
+    "combo": 0,
     "inventory": {"hp_potions": 2, "dp_potions": 2}
 }
+
+# DP System constants
+COMBO_MAX = 100
+COMBO_PER_ATTACK = 25
+POWER_STRIKE_DP_COST = 10
+POWER_STRIKE_MULTIPLIER = 2.5
+VULNERABILITY_BONUS = 0.5
+PARRY_DP_RESTORE = 5
+PARRY_COUNTER_MULTIPLIER = 0.5
 player_stats = copy.deepcopy(DEFAULT_PLAYER_STATS)
 
 def normalize_stats(data):
@@ -79,16 +89,17 @@ def open_loot_shop():
     while True:
         print(f"\n---  NABI TRADING POST  ---")
         print(f"Your Wallet: {player_stats['coins']} / 500 Coins")
-        print(f"Your Stats: HP: {player_stats['hp']}/{player_stats['max_hp']} | DP: {player_stats['def']}/{player_stats['max_def']} | ATK: {player_stats['atk']}")
-        print("-" * 35)
+        print(f"Your Stats: HP: {player_stats['hp']}/{player_stats['max_hp']} | Shield: {player_stats['def']}/{player_stats['max_def']} | ATK: {player_stats['atk']}")
+        print("-" * 40)
         print("1. [RESTORE] Full HP (20c)")
-        print("2. [REPAIR] Full Armor/DP (20c)")
+        print("2. [REPAIR] Full Shield (20c)")
         print("3. [BUFF] Permanent ATK +5 (100c)")
-        print("4. [BUFF] Permanent Max DP +5 (100c)")
+        print("4. [BUFF] Permanent Max Shield +5 (100c)")
         print("5. [BUY] HP Potion (50c)")
-        print("6. [BUY] DP Potion (50c)")
+        print("6. [BUY] Shield Potion (50c)")
         print("7. [UPGRADE] Max HP +20 (150c)")
-        print("8. [EXIT] Leave Shop")
+        print("8. [UPGRADE] Max Shield +10 (120c)")
+        print("9. [EXIT] Leave Shop")
         print("-" * 35)
 
         choice = get_input("What would you like to buy? ")
@@ -105,7 +116,7 @@ def open_loot_shop():
             if player_stats["coins"] >= 20:
                 player_stats["def"] = player_stats["max_def"]
                 player_stats["coins"] -= 20
-                print(">> Success: Your armor is shiny and new! DP is full.")
+                print(">> Success: Shield fully repaired!")
             else:
                 print(">> Error: Not enough coins!")
 
@@ -122,7 +133,7 @@ def open_loot_shop():
                 player_stats["max_def"] += 5
                 player_stats["def"] = player_stats["max_def"]
                 player_stats["coins"] -= 100
-                print(f">> Success: Your Max DP is now {player_stats['max_def']}.")
+                print(f">> Success: Max Shield is now {player_stats['max_def']}.")
             else:
                 print(">> Error: Not enough coins!")
 
@@ -138,7 +149,7 @@ def open_loot_shop():
             if player_stats["coins"] >= 50:
                 player_stats["inventory"]["dp_potions"] += 1
                 player_stats["coins"] -= 50
-                print(f">> Success: DP Potion added! Total: {player_stats['inventory']['dp_potions']}")
+                print(f">> Success: Shield Potion added! Total: {player_stats['inventory']['dp_potions']}")
             else:
                 print(">> Error: Not enough coins!")
 
@@ -152,6 +163,15 @@ def open_loot_shop():
                 print(">> Error: Not enough coins!")
 
         elif choice == "8":
+            if player_stats["coins"] >= 120:
+                player_stats["max_def"] += 10
+                player_stats["def"] = player_stats["max_def"]
+                player_stats["coins"] -= 120
+                print(f">> Success: Max Shield is now {player_stats['max_def']}.")
+            else:
+                print(">> Error: Not enough coins!")
+
+        elif choice == "9":
             print(">> Shopkeeper: Safe travels!")
             save_game()
             return
@@ -198,7 +218,7 @@ def open_loot_box(is_cursed=False):
         elif roll == 3:
             player_stats["max_def"] += 10
             player_stats["def"] = player_stats["max_def"]
-            print(f"Defense Upgrade! Your Max DP is now {player_stats['max_def']}.")
+            print(f"Shield Upgrade! Max Shield is now {player_stats['max_def']}.")
         elif roll == 4:
             if player_stats["cowardice"] > 0:
                 player_stats["cowardice"] = 0
@@ -209,6 +229,44 @@ def open_loot_box(is_cursed=False):
                 print(f"Treasure! Gained {bonus} coins! Total: {player_stats['coins']}/500")
 
 
+def apply_damage_to_player_cli(raw_damage, source_name="Enemy"):
+    """Shield HP: DP absorbs first, overflow to HP. Vulnerability at 0 DP."""
+    if player_stats["def"] <= 0:
+        vuln_dmg = int(raw_damage * (1 + VULNERABILITY_BONUS))
+        player_stats["hp"] -= vuln_dmg
+        print(f">> VULNERABLE! {source_name} deals {vuln_dmg} ({raw_damage}+{vuln_dmg - raw_damage})!")
+        return vuln_dmg
+    if raw_damage <= player_stats["def"]:
+        player_stats["def"] -= raw_damage
+        print(f">> Shield absorbs {raw_damage}! (DP: {player_stats['def']}/{player_stats['max_def']})")
+        return 0
+    overflow = raw_damage - player_stats["def"]
+    print(f">> Shield broken! {player_stats['def']} absorbed, {overflow} HP lost!")
+    player_stats["def"] = 0
+    player_stats["hp"] -= overflow
+    return overflow
+
+def apply_parry_cli(enemy_atk, enemy_max_atk, source_name="Enemy"):
+    """Parry: restores DP, blocks through shield. Counter on strong attacks."""
+    dp_restored = min(PARRY_DP_RESTORE, player_stats["max_def"] - player_stats["def"])
+    player_stats["def"] += dp_restored
+    reduced_dmg = max(0, enemy_atk - player_stats["def"])
+    if reduced_dmg > 0:
+        player_stats["def"] = 0
+        player_stats["hp"] -= reduced_dmg
+        print(f">> Parried! DP +{dp_restored}, but took {reduced_dmg} overflow!")
+    else:
+        player_stats["def"] -= enemy_atk
+        print(f">> Parried! DP +{dp_restored}, shield holds! (DP: {player_stats['def']})")
+    counter_dmg = 0
+    if enemy_atk >= enemy_max_atk * 0.7:
+        counter_dmg = int(player_stats["atk"] * PARRY_COUNTER_MULTIPLIER)
+        print(f">> COUNTER-ATTACK! You strike back for {counter_dmg}!")
+    return counter_dmg
+
+def add_combo_cli(amount=COMBO_PER_ATTACK):
+    player_stats["combo"] = min(COMBO_MAX, player_stats["combo"] + amount)
+
 def get_input(prompt):
     user_input = input(prompt).strip()
     if user_input.lower() in ['quit', 'exit']:
@@ -216,6 +274,7 @@ def get_input(prompt):
         sys.exit()
     if user_input.lower() == "godmode":
         player_stats["hp"], player_stats["atk"], player_stats["def"] = 999, 999, 999
+        player_stats["combo"] = COMBO_MAX
         print("** CHEAT ACTIVATED **")
         return get_input(prompt)
     return user_input
@@ -233,10 +292,11 @@ def gain_xp(amount):
         player_stats["atk"] += 5
         player_stats["max_def"] += 5
         player_stats["def"] = player_stats["max_def"]
+        player_stats["combo"] = 0
         
         print(f"\nLEVEL UP! You are now Level {player_stats['level']}!")
-        print(f"Stats Increased: ATK +5 | Max HP +20 | Max DP +5")
-        print("Your Health and Armor have been fully restored!")
+        print(f"Stats Increased: ATK +5 | Max HP +20 | Max Shield +5")
+        print("Your Health and Shield have been fully restored!")
 
 def start_combat(enemy_name):
     lvl_bonus = player_stats["level"] * 10
@@ -244,6 +304,7 @@ def start_combat(enemy_name):
     
     e_hp = int(random.randint(50 + lvl_bonus, 100 + lvl_bonus) * c_mult)
     e_atk = int(random.randint(15 + player_stats["level"], 25 + (player_stats["level"] * 2)) * c_mult)
+    e_max_atk = e_atk
     e_dp = int(random.randint(5 + player_stats["level"], 15 + player_stats["level"]) * c_mult)
 
     print(f"\n--- BATTLE: {name} (Lv.{player_stats['level']}) vs {enemy_name} ---")
@@ -252,10 +313,17 @@ def start_combat(enemy_name):
     print(f"Enemy Stats: HP: {e_hp} | ATK: {e_atk} | DEF: {e_dp}")
 
     while player_stats["hp"] > 0 and e_hp > 0:
-        defend_bonus = 0
-        print(f"\n{name}: {player_stats['hp']}/{player_stats['max_hp']} HP | DP: {player_stats['def']}")
+        did_parry = False
+        vuln_tag = " [VULNERABLE!]" if player_stats["def"] <= 0 else ""
+        combo_tag = " [COMBO READY!]" if player_stats["combo"] >= COMBO_MAX else f" Combo: {player_stats['combo']}/{COMBO_MAX}"
+        print(f"\n{name}: {player_stats['hp']}/{player_stats['max_hp']} HP | DP: {player_stats['def']}/{player_stats['max_def']}{vuln_tag}{combo_tag}")
         print(f"{enemy_name}: {e_hp} HP")
-        print("1. Attack | 2. Defend | 3. Use Item | 4. Run | 5. Shop | (Quit to Menu)")
+
+        actions = "1. Attack | 2. Parry | 3. Use Item | 4. Run | 5. Shop"
+        if player_stats["combo"] >= COMBO_MAX:
+            actions += " | 6. Special"
+        actions += " | (Quit/Kill)"
+        print(actions)
         
         action = get_input("What is your move? ").lower()
 
@@ -270,14 +338,15 @@ def start_combat(enemy_name):
 
         if action == "1":
             e_hp -= player_stats["atk"]
-            print(f">> You strike! The {enemy_name} takes {player_stats['atk']} damage.")
+            add_combo_cli()
+            print(f">> You strike! The {enemy_name} takes {player_stats['atk']} damage. Combo +{COMBO_PER_ATTACK}")
         
         elif action == "2":
-            defend_bonus = 10
-            print(">> You brace yourself! Your armor will absorb more damage this turn.")
+            did_parry = True
+            print(">> You raise your guard!")
         
         elif action == "3":
-            print(f"Potions: HP({player_stats['inventory']['hp_potions']}) | DP({player_stats['inventory']['dp_potions']})")
+            print(f"Potions: HP({player_stats['inventory']['hp_potions']}) | Shield({player_stats['inventory']['dp_potions']})")
             item_choice = get_input("Use (HP/DP/Back): ").lower()
             
             if item_choice == "hp" and player_stats["inventory"]["hp_potions"] > 0:
@@ -288,7 +357,7 @@ def start_combat(enemy_name):
             elif item_choice == "dp" and player_stats["inventory"]["dp_potions"] > 0:
                 player_stats["def"] = player_stats["max_def"]
                 player_stats["inventory"]["dp_potions"] -= 1
-                print(">> Used DP Potion!")
+                print(">> Shield restored!")
                 continue
             else:
                 print(">> No item used.")
@@ -301,26 +370,46 @@ def start_combat(enemy_name):
                 return "escaped" 
             else:
                 print(f">> You failed to escape! {enemy_name} blocks your path!")
+
         elif action == "5":
             open_loot_shop()
             continue
 
+        elif action == "6" and player_stats["combo"] >= COMBO_MAX:
+            print("COMBO SPECIAL:")
+            print(f"  1. Power Strike (2.5x ATK, costs {POWER_STRIKE_DP_COST} DP)")
+            print("  2. Shield Restore (full DP repair)")
+            print("  3. Back")
+            spec = get_input("Choose: ")
+            if spec == "1":
+                if player_stats["def"] >= POWER_STRIKE_DP_COST:
+                    player_stats["combo"] = 0
+                    player_stats["def"] -= POWER_STRIKE_DP_COST
+                    dmg = int(player_stats["atk"] * POWER_STRIKE_MULTIPLIER)
+                    e_hp -= dmg
+                    print(f">> POWER STRIKE! -{POWER_STRIKE_DP_COST} DP, deals {dmg} damage!")
+                else:
+                    print(f">> Need {POWER_STRIKE_DP_COST} DP for Power Strike!")
+                    continue
+            elif spec == "2":
+                player_stats["combo"] = 0
+                old_dp = player_stats["def"]
+                player_stats["def"] = player_stats["max_def"]
+                print(f">> SHIELD RESTORE! DP fully repaired (+{player_stats['def'] - old_dp})!")
+            else:
+                continue
+
         else:
-            print("Invalid action! Choose 1, 2, 3, 4, 5, or type 'Quit'.")
+            print("Invalid action!")
             continue
 
         if e_hp > 0:
-            if action == "2":
-                defense_check = (player_stats["def"] + defend_bonus) - e_atk
-                if defense_check >= 0:
-                    print(f">> Your armor absorbs the hit! 0 HP lost.")
-                else:
-                    damage_taken = abs(defense_check)
-                    player_stats["hp"] -= damage_taken
-                    print(f">> Your armor cracked! You took {damage_taken} damage.")
+            if did_parry:
+                counter_dmg = apply_parry_cli(e_atk, e_max_atk, enemy_name)
+                if counter_dmg > 0:
+                    e_hp -= counter_dmg
             else:
-                player_stats["hp"] -= e_atk
-                print(f">> {enemy_name} hits you for {e_atk} damage!")
+                apply_damage_to_player_cli(e_atk, enemy_name)
 
     if player_stats["hp"] > 0:
         print(f"\nVictory!")
