@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.version.outputs.tag }}
-      created: ${{ steps.check.outputs.created }}
+      build: ${{ steps.check.outputs.build }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -26,24 +26,29 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Check if release already exists
+      - name: Create release if needed
         id: check
         run: |
           TAG="v${{ steps.version.outputs.version }}"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "created=false" >> "$GITHUB_OUTPUT"
+            ASSET_COUNT=$(gh release view "$TAG" --json assets --jq '.assets | length')
+            if [ "$ASSET_COUNT" -gt 0 ]; then
+              echo "build=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "build=true" >> "$GITHUB_OUTPUT"
+            fi
           else
             gh release create "$TAG" \
               --title "Nabi $TAG" \
               --generate-notes
-            echo "created=true" >> "$GITHUB_OUTPUT"
+            echo "build=true" >> "$GITHUB_OUTPUT"
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build:
     needs: release
-    if: needs.release.outputs.created == 'true' || github.event_name == 'workflow_dispatch'
+    if: needs.release.outputs.build == 'true' || github.event_name == 'workflow_dispatch'
     strategy:
       matrix:
         include:
