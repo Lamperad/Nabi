@@ -4,13 +4,7 @@ import sys
 import random
 import copy
 
-VERSION = "4.1.0"import json
-import os
-import sys
-import random
-import copy
-
-VERSION = "4.1.0"
+VERSION = "5.0.0"
 SAVE_FILE = "save_data.json"
 name = " "
 dan_patience = 0

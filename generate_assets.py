@@ -1015,6 +1015,881 @@ def gen_bg_arcade():
 
 
 # ======================================================================
+#  STORY EXPANSION — NEW SPRITES
+# ======================================================================
+
+# --- Imp (Grub) ---
+IMP_GREY = (80, 70, 90)
+IMP_DARK = (50, 40, 60)
+IMP_EYE = (255, 180, 0)
+
+def draw_imp(s, body_dy=0, wing_angle=0, grin=False):
+    cx, cy = 32, 36
+    by = cy + body_dy
+    # Tiny wings
+    for side in [-1, 1]:
+        wx = cx + side * 8
+        pts = [
+            (wx, by - 6),
+            (wx + side * (8 + wing_angle), by - 12 - wing_angle),
+            (wx + side * 4, by - 2),
+        ]
+        pygame.draw.polygon(s, IMP_DARK, pts)
+    # Body (small, hunched)
+    pygame.draw.ellipse(s, IMP_GREY, (cx - 8, by - 4, 16, 14))
+    pygame.draw.ellipse(s, IMP_DARK, (cx - 8, by - 4, 16, 14), 1)
+    # Legs
+    pygame.draw.rect(s, IMP_DARK, (cx - 5, by + 8, 3, 8))
+    pygame.draw.rect(s, IMP_DARK, (cx + 2, by + 8, 3, 8))
+    # Arms
+    pygame.draw.rect(s, IMP_GREY, (cx - 12, by, 4, 8))
+    pygame.draw.rect(s, IMP_GREY, (cx + 8, by, 4, 8))
+    # Head
+    head_y = by - 14
+    pygame.draw.ellipse(s, IMP_GREY, (cx - 7, head_y, 14, 12))
+    # Pointy ears
+    pygame.draw.polygon(s, IMP_GREY, [(cx - 7, head_y + 3), (cx - 12, head_y - 4), (cx - 4, head_y + 1)])
+    pygame.draw.polygon(s, IMP_GREY, [(cx + 7, head_y + 3), (cx + 12, head_y - 4), (cx + 4, head_y + 1)])
+    # Eyes
+    pygame.draw.rect(s, IMP_EYE, (cx - 4, head_y + 4, 3, 2))
+    pygame.draw.rect(s, IMP_EYE, (cx + 1, head_y + 4, 3, 2))
+    if grin:
+        pygame.draw.arc(s, (200, 200, 200), (cx - 4, head_y + 7, 8, 4), 3.14, 6.28, 1)
+
+
+def gen_imp():
+    print("Generating imp (Grub)...")
+    frames = []
+    for i in range(4):
+        s = make_surf()
+        dy = [0, -2, 0, 2][i]
+        wa = [0, 1, 2, 1][i]
+        draw_imp(s, body_dy=dy, wing_angle=wa, grin=(i % 2 == 0))
+        frames.append(s)
+    save_sheet(frames, "imp_idle")
+    frames = []
+    for i in range(4):
+        s = make_surf()
+        dy = [0, -3, -1, 1][i]
+        wa = [1, 3, 2, 0][i]
+        draw_imp(s, body_dy=dy, wing_angle=wa, grin=True)
+        frames.append(s)
+    save_sheet(frames, "imp_attack")
+
+
+# --- Oracle Ysel ---
+ORACLE_ROBE = (60, 50, 80)
+ORACLE_SHAWL = (100, 80, 120)
+ORACLE_EYE = (200, 210, 220)
+
+def draw_oracle(s, body_dy=0, sway=0):
+    cx, cy = 32, 32
+    by = cy + 6 + body_dy
+    # Robe (full body flowing)
+    pts = [
+        (cx - 2, by - 14),
+        (cx + 2, by - 14),
+        (cx + 14 + sway, by + 24),
+        (cx - 14 + sway, by + 24),
+    ]
+    pygame.draw.polygon(s, ORACLE_ROBE, pts)
+    pygame.draw.polygon(s, (40, 30, 60), pts, 1)
+    # Shawl
+    pygame.draw.polygon(s, ORACLE_SHAWL, [
+        (cx - 10, by - 4), (cx + 10, by - 4),
+        (cx + 14 + sway, by + 8), (cx - 14 + sway, by + 8),
+    ])
+    # Hands
+    pygame.draw.circle(s, (180, 150, 120), (cx - 10 + sway, by + 6), 3)
+    pygame.draw.circle(s, (180, 150, 120), (cx + 10 + sway, by + 6), 3)
+    # Head
+    head_y = by - 22
+    pygame.draw.ellipse(s, (180, 150, 120), (cx - 5, head_y, 10, 10))
+    # Silver eyes
+    pygame.draw.rect(s, ORACLE_EYE, (cx - 3, head_y + 4, 2, 2))
+    pygame.draw.rect(s, ORACLE_EYE, (cx + 1, head_y + 4, 2, 2))
+    # Hair (white, wispy)
+    pygame.draw.arc(s, (200, 200, 210), (cx - 8, head_y - 3, 16, 10), 0, 3.14, 2)
+
+
+def gen_oracle():
+    print("Generating oracle Ysel...")
+    frames = []
+    for i in range(4):
+        s = make_surf()
+        dy = [0, -1, 0, 1][i]
+        sw = [0, 1, 0, -1][i]
+        draw_oracle(s, body_dy=dy, sway=sw)
+        frames.append(s)
+    save_sheet(frames, "oracle_idle")
+
+
+# --- Cave Dragon Veth ---
+DRAGON_GOLD = (180, 160, 60)
+DRAGON_DARK = (100, 80, 30)
+DRAGON_SCALE = (140, 120, 40)
+DRAGON_EYE = (255, 100, 0)
+
+def draw_dragon(s, body_dy=0, wing_angle=0, mouth_open=False):
+    cx, cy = 32, 30
+    by = cy + body_dy
+    # Wings
+    for side in [-1, 1]:
+        wx = cx + side * 10
+        w_spread = 16 + wing_angle * 2
+        pts = [
+            (wx, by - 4),
+            (wx + side * w_spread, by - 16 - wing_angle),
+            (wx + side * (w_spread - 6), by + 2),
+            (wx + side * 4, by + 6),
+        ]
+        pygame.draw.polygon(s, DRAGON_DARK, pts)
+        pygame.draw.polygon(s, DRAGON_SCALE, pts, 1)
+    # Body (bulky)
+    pygame.draw.ellipse(s, DRAGON_GOLD, (cx - 12, by - 6, 24, 20))
+    pygame.draw.ellipse(s, DRAGON_DARK, (cx - 12, by - 6, 24, 20), 1)
+    # Belly scales
+    pygame.draw.ellipse(s, DRAGON_SCALE, (cx - 6, by - 2, 12, 14))
+    # Legs
+    pygame.draw.rect(s, DRAGON_GOLD, (cx - 10, by + 12, 5, 10))
+    pygame.draw.rect(s, DRAGON_GOLD, (cx + 5, by + 12, 5, 10))
+    # Claws
+    for lx in [cx - 10, cx + 5]:
+        for j in range(3):
+            pygame.draw.line(s, DRAGON_DARK, (lx + j * 2, by + 22), (lx + j * 2, by + 25), 1)
+    # Tail
+    pygame.draw.arc(s, DRAGON_GOLD, (cx + 8, by + 4, 20, 16), 0, 2.5, 3)
+    # Neck + Head
+    head_y = by - 18
+    pygame.draw.rect(s, DRAGON_GOLD, (cx - 3, by - 12, 6, 8))
+    pygame.draw.ellipse(s, DRAGON_GOLD, (cx - 8, head_y, 16, 12))
+    # Horns
+    pygame.draw.polygon(s, DRAGON_DARK, [(cx - 6, head_y + 2), (cx - 9, head_y - 6), (cx - 3, head_y + 1)])
+    pygame.draw.polygon(s, DRAGON_DARK, [(cx + 6, head_y + 2), (cx + 9, head_y - 6), (cx + 3, head_y + 1)])
+    # Eyes
+    pygame.draw.rect(s, DRAGON_EYE, (cx - 5, head_y + 5, 3, 2))
+    pygame.draw.rect(s, DRAGON_EYE, (cx + 2, head_y + 5, 3, 2))
+    if mouth_open:
+        pygame.draw.rect(s, (200, 60, 0), (cx - 4, head_y + 9, 8, 3))
+        # Fire breath
+        pygame.draw.polygon(s, (255, 160, 0), [(cx, head_y + 12), (cx - 6, head_y + 18), (cx + 6, head_y + 18)])
+
+
+def gen_dragon():
+    print("Generating cave dragon Veth...")
+    frames = []
+    for i in range(4):
+        s = make_surf()
+        dy = [0, -1, 0, 1][i]
+        wa = [0, 1, 2, 1][i]
+        draw_dragon(s, body_dy=dy, wing_angle=wa)
+        frames.append(s)
+    save_sheet(frames, "dragon_idle")
+    frames = []
+    for i in range(4):
+        s = make_surf()
+        dy = [0, -2, 0, 1][i]
+        wa = [1, 3, 2, 0][i]
+        draw_dragon(s, body_dy=dy, wing_angle=wa, mouth_open=(i >= 1))
+        frames.append(s)
+    save_sheet(frames, "dragon_attack")
+
+
+# --- Mirror Wraith ---
+MIRROR_SILVER = (180, 190, 200)
+MIRROR_DARK = (100, 110, 130)
+MIRROR_GLOW = (200, 220, 255)
+
+def draw_mirror_wraith(s, body_dy=0, sway=0, flicker=0):
+    cx, cy = 32, 30
+    by = cy + body_dy
+    # Ghostly reflected player shape
+    pts = [
+        (cx, by - 16),
+        (cx - 12 + sway, by + 18),
+        (cx + 12 + sway, by + 18),
+    ]
+    pygame.draw.polygon(s, MIRROR_SILVER, pts)
+    pygame.draw.polygon(s, MIRROR_DARK, pts, 1)
+    # Glass shards floating around
+    for sx, sy in [(-10, -5), (10, -8), (-8, 10), (12, 5)]:
+        pygame.draw.rect(s, MIRROR_GLOW, (cx + sx + sway, by + sy, 3, 5), 1)
+    # Face - glowing white eyes
+    eye_c = (min(255, 200 + flicker), min(255, 220 + flicker), 255)
+    pygame.draw.rect(s, eye_c, (cx - 5, by - 8, 3, 2))
+    pygame.draw.rect(s, eye_c, (cx + 2, by - 8, 3, 2))
+    # Mirror border outline
+    pygame.draw.rect(s, MIRROR_GLOW, (cx - 14 + sway, by - 18, 28, 38), 1)
+
+
+def gen_mirror_wraith():
+    print("Generating mirror wraith...")
+    frames = []
+    for i in range(4):
+        s = make_surf()
+        dy = [0, -1, 0, 1][i]
+        sw = [0, 2, 0, -2][i]
+        fl = [0, 20, 40, 20][i]
+        draw_mirror_wraith(s, body_dy=dy, sway=sw, flicker=fl)
+        frames.append(s)
+    save_sheet(frames, "mirror_wraith_idle")
+    frames = []
+    for i in range(4):
+        s = make_surf()
+        dy = [0, -3, -1, 1][i]
+        sw = [0, 3, -3, 0][i]
+        fl = [20, 50, 40, 10][i]
+        draw_mirror_wraith(s, body_dy=dy, sway=sw, flicker=fl)
+        frames.append(s)
+    save_sheet(frames, "mirror_wraith_attack")
+
+
+# --- Revenant Knight ---
+REV_ARMOR = (60, 65, 75)
+REV_DARK = (30, 32, 40)
+REV_GLOW = (255, 200, 50)
+REV_RED_GLOW = (255, 50, 30)
+
+def draw_revenant(s, body_dy=0, arm_angle=0, eyes_gold=True):
+    cx, cy = 32, 32
+    by = cy + 6 + body_dy
+    # Heavy armor legs
+    pygame.draw.rect(s, REV_ARMOR, (cx - 6, by + 14, 5, 14))
+    pygame.draw.rect(s, REV_ARMOR, (cx + 1, by + 14, 5, 14))
+    pygame.draw.rect(s, REV_DARK, (cx - 7, by + 26, 7, 4))
+    pygame.draw.rect(s, REV_DARK, (cx + 0, by + 26, 7, 4))
+    # Body (heavy dark armor)
+    pygame.draw.rect(s, REV_ARMOR, (cx - 9, by - 2, 18, 16), border_radius=2)
+    pygame.draw.rect(s, REV_DARK, (cx - 9, by - 2, 18, 16), 1, border_radius=2)
+    # Crest on chest
+    pygame.draw.polygon(s, REV_GLOW if eyes_gold else REV_RED_GLOW, [
+        (cx, by), (cx - 3, by + 5), (cx, by + 8), (cx + 3, by + 5)
+    ])
+    # Arms
+    ra_y = by + 1 + int(arm_angle * 0.4)
+    pygame.draw.rect(s, REV_ARMOR, (cx - 13, by + 1, 5, 12))
+    pygame.draw.rect(s, REV_ARMOR, (cx + 8, ra_y, 5, 12))
+    # Greatsword
+    sw_y = ra_y - 10 - int(arm_angle * 2)
+    pygame.draw.rect(s, (40, 40, 50), (cx + 9, ra_y + 2, 3, 8))  # hilt
+    pygame.draw.rect(s, (120, 120, 140), (cx + 9, sw_y, 3, 14))  # blade
+    # Shadow fire on sword
+    if not eyes_gold:
+        for fi in range(3):
+            pygame.draw.ellipse(s, (60 + fi * 20, 10, 40 - fi * 10, 80),
+                                (cx + 7, sw_y - fi * 3, 7, 5))
+    # Head (helmet)
+    head_y = by - 16
+    pygame.draw.rect(s, REV_ARMOR, (cx - 7, head_y, 14, 14), border_radius=3)
+    pygame.draw.rect(s, REV_DARK, (cx - 7, head_y, 14, 14), 1, border_radius=3)
+    # Visor slit
+    eye_c = REV_GLOW if eyes_gold else REV_RED_GLOW
+    pygame.draw.rect(s, eye_c, (cx - 5, head_y + 5, 10, 2))
+    # Plume
+    pygame.draw.rect(s, REV_DARK, (cx - 1, head_y - 4, 2, 5))
+
+
+def gen_revenant():
+    print("Generating revenant knight...")
+    frames = []
+    for i in range(4):
+        s = make_surf()
+        dy = [0, -1, 0, 1][i]
+        draw_revenant(s, body_dy=dy, eyes_gold=False)
+        frames.append(s)
+    save_sheet(frames, "revenant_idle")
+    frames = []
+    for i in range(4):
+        s = make_surf()
+        arm = [0, 3, 6, 2][i]
+        dy = [0, -2, 0, 1][i]
+        draw_revenant(s, body_dy=dy, arm_angle=arm, eyes_gold=False)
+        frames.append(s)
+    save_sheet(frames, "revenant_attack")
+
+
+# --- Malachar the Archdemon ---
+MALACH_BLACK = (15, 10, 20)
+MALACH_DARK = (40, 20, 50)
+MALACH_PURPLE = (120, 40, 160)
+MALACH_EYE = (255, 0, 100)
+
+def draw_malachar(s, body_dy=0, wing_angle=0, aura=0):
+    cx, cy = 32, 28
+    by = cy + body_dy
+    # Massive wings
+    for side in [-1, 1]:
+        wx = cx + side * 10
+        w_spread = 20 + wing_angle * 2
+        pts = [
+            (wx, by - 6),
+            (wx + side * w_spread, by - 22 - wing_angle),
+            (wx + side * (w_spread - 4), by - 8),
+            (wx + side * 8, by + 6),
+        ]
+        pygame.draw.polygon(s, MALACH_DARK, pts)
+        pygame.draw.polygon(s, MALACH_PURPLE, pts, 1)
+    # Body armor (absorbs light)
+    pygame.draw.rect(s, MALACH_BLACK, (cx - 10, by - 4, 20, 18), border_radius=3)
+    pygame.draw.rect(s, MALACH_DARK, (cx - 10, by - 4, 20, 18), 1, border_radius=3)
+    # Purple runes on armor
+    for ry in [by, by + 6]:
+        pygame.draw.line(s, MALACH_PURPLE, (cx - 6, ry), (cx + 6, ry), 1)
+    # Legs
+    pygame.draw.rect(s, MALACH_BLACK, (cx - 6, by + 14, 5, 14))
+    pygame.draw.rect(s, MALACH_BLACK, (cx + 1, by + 14, 5, 14))
+    # Arms
+    pygame.draw.rect(s, MALACH_BLACK, (cx - 15, by, 6, 14))
+    pygame.draw.rect(s, MALACH_BLACK, (cx + 9, by, 6, 14))
+    # Claws
+    for ax in [cx - 15, cx + 9]:
+        for j in range(3):
+            pygame.draw.line(s, MALACH_PURPLE, (ax + j * 2, by + 14), (ax + j * 2, by + 18), 1)
+    # Head
+    head_y = by - 18
+    pygame.draw.ellipse(s, MALACH_BLACK, (cx - 8, head_y, 16, 14))
+    # Crown/horns
+    for side in [-1, 1]:
+        pygame.draw.polygon(s, MALACH_PURPLE, [
+            (cx + side * 6, head_y + 2),
+            (cx + side * 12, head_y - 10),
+            (cx + side * 4, head_y),
+        ])
+    # Eyes
+    pygame.draw.rect(s, MALACH_EYE, (cx - 5, head_y + 5, 3, 3))
+    pygame.draw.rect(s, MALACH_EYE, (cx + 2, head_y + 5, 3, 3))
+    # Aura effect
+    if aura > 0:
+        aura_s = pygame.Surface((48, 48), pygame.SRCALPHA)
+        pygame.draw.circle(aura_s, (MALACH_PURPLE[0], MALACH_PURPLE[1], MALACH_PURPLE[2], min(60, aura * 3)),
+                           (24, 24), 24)
+        s.blit(aura_s, (cx - 24, by - 20))
+
+
+def gen_malachar():
+    print("Generating Malachar the Archdemon...")
+    frames = []
+    for i in range(4):
+        s = make_surf()
+        dy = [0, -1, 0, 1][i]
+        wa = [0, 1, 2, 1][i]
+        au = [5, 10, 15, 10][i]
+        draw_malachar(s, body_dy=dy, wing_angle=wa, aura=au)
+        frames.append(s)
+    save_sheet(frames, "malachar_idle")
+    frames = []
+    for i in range(4):
+        s = make_surf()
+        dy = [0, -3, -1, 1][i]
+        wa = [2, 4, 3, 1][i]
+        au = [10, 20, 15, 5][i]
+        draw_malachar(s, body_dy=dy, wing_angle=wa, aura=au)
+        frames.append(s)
+    save_sheet(frames, "malachar_attack")
+
+
+# --- Necromancer ---
+NECRO_ROBE = (30, 25, 40)
+NECRO_TRIM = (80, 60, 100)
+NECRO_GREEN = (60, 200, 80)
+
+def draw_necromancer(s, body_dy=0, cast=False):
+    cx, cy = 32, 32
+    by = cy + 6 + body_dy
+    # Robe
+    pts = [
+        (cx - 4, by - 12),
+        (cx + 4, by - 12),
+        (cx + 14, by + 24),
+        (cx - 14, by + 24),
+    ]
+    pygame.draw.polygon(s, NECRO_ROBE, pts)
+    pygame.draw.polygon(s, NECRO_TRIM, pts, 1)
+    # Arms
+    pygame.draw.rect(s, NECRO_ROBE, (cx - 14, by, 6, 10))
+    pygame.draw.rect(s, NECRO_ROBE, (cx + 8, by, 6, 10))
+    # Hands
+    pygame.draw.circle(s, (160, 130, 110), (cx - 12, by + 10), 3)
+    pygame.draw.circle(s, (160, 130, 110), (cx + 12, by + 10), 3)
+    if cast:
+        # Green magic glow in hands
+        glow_s = pygame.Surface((12, 12), pygame.SRCALPHA)
+        pygame.draw.circle(glow_s, (60, 200, 80, 100), (6, 6), 6)
+        s.blit(glow_s, (cx - 18, by + 4))
+        s.blit(glow_s, (cx + 6, by + 4))
+    # Hood
+    head_y = by - 20
+    pygame.draw.polygon(s, NECRO_ROBE, [
+        (cx, head_y - 4),
+        (cx - 8, head_y + 10),
+        (cx + 8, head_y + 10),
+    ])
+    # Face (partially hidden)
+    pygame.draw.ellipse(s, (160, 130, 110), (cx - 4, head_y + 2, 8, 8))
+    # Eyes
+    pygame.draw.rect(s, NECRO_GREEN, (cx - 3, head_y + 5, 2, 2))
+    pygame.draw.rect(s, NECRO_GREEN, (cx + 1, head_y + 5, 2, 2))
+
+
+def gen_necromancer():
+    print("Generating necromancer...")
+    frames = []
+    for i in range(4):
+        s = make_surf()
+        dy = [0, -1, 0, 1][i]
+        draw_necromancer(s, body_dy=dy)
+        frames.append(s)
+    save_sheet(frames, "necromancer_idle")
+    frames = []
+    for i in range(4):
+        s = make_surf()
+        dy = [0, -2, 0, 1][i]
+        draw_necromancer(s, body_dy=dy, cast=(i >= 1))
+        frames.append(s)
+    save_sheet(frames, "necromancer_attack")
+
+
+# --- Lore Golem ---
+GOLEM_PAPER = (200, 190, 170)
+GOLEM_INK = (40, 30, 60)
+GOLEM_TEXT = (80, 60, 100)
+
+def draw_lore_golem(s, body_dy=0, arm_angle=0):
+    cx, cy = 32, 30
+    by = cy + body_dy
+    # Swirling pages body
+    pygame.draw.rect(s, GOLEM_PAPER, (cx - 10, by - 6, 20, 22), border_radius=4)
+    pygame.draw.rect(s, GOLEM_INK, (cx - 10, by - 6, 20, 22), 1, border_radius=4)
+    # Text lines on body
+    for ty in range(by - 2, by + 14, 3):
+        pygame.draw.line(s, GOLEM_TEXT, (cx - 7, ty), (cx + 7, ty), 1)
+    # Floating pages around
+    for px, py in [(-14, -8), (12, -10), (-12, 12), (14, 8)]:
+        pygame.draw.rect(s, GOLEM_PAPER, (cx + px, by + py, 5, 6), 1)
+    # Legs (paper stacks)
+    pygame.draw.rect(s, GOLEM_PAPER, (cx - 7, by + 16, 5, 10))
+    pygame.draw.rect(s, GOLEM_PAPER, (cx + 2, by + 16, 5, 10))
+    # Arms
+    ay = by + int(arm_angle * 0.5)
+    pygame.draw.rect(s, GOLEM_PAPER, (cx - 15, ay, 6, 12))
+    pygame.draw.rect(s, GOLEM_PAPER, (cx + 9, ay, 6, 12))
+    # Head (book-shaped)
+    head_y = by - 16
+    pygame.draw.rect(s, GOLEM_PAPER, (cx - 7, head_y, 14, 10), border_radius=2)
+    pygame.draw.rect(s, GOLEM_INK, (cx - 7, head_y, 14, 10), 1, border_radius=2)
+    # Eyes (ink blots)
+    pygame.draw.circle(s, GOLEM_INK, (cx - 3, head_y + 5), 2)
+    pygame.draw.circle(s, GOLEM_INK, (cx + 3, head_y + 5), 2)
+
+
+def gen_lore_golem():
+    print("Generating lore golem...")
+    frames = []
+    for i in range(4):
+        s = make_surf()
+        dy = [0, -1, 0, 1][i]
+        draw_lore_golem(s, body_dy=dy)
+        frames.append(s)
+    save_sheet(frames, "lore_golem_idle")
+    frames = []
+    for i in range(4):
+        s = make_surf()
+        arm = [0, 2, 4, 1][i]
+        dy = [0, -2, 0, 1][i]
+        draw_lore_golem(s, body_dy=dy, arm_angle=arm)
+        frames.append(s)
+    save_sheet(frames, "lore_golem_attack")
+
+
+# --- Undead (generic zombie soldier) ---
+UNDEAD_SKIN = (120, 140, 100)
+UNDEAD_DARK = (70, 80, 55)
+UNDEAD_ARMOR = (80, 75, 65)
+
+def draw_undead(s, body_dy=0, arm_angle=0):
+    cx, cy = 32, 32
+    by = cy + 6 + body_dy
+    # Legs (shambling)
+    pygame.draw.rect(s, UNDEAD_DARK, (cx - 5, by + 14, 4, 14))
+    pygame.draw.rect(s, UNDEAD_DARK, (cx + 2, by + 14, 4, 14))
+    # Body (tattered armor)
+    pygame.draw.rect(s, UNDEAD_ARMOR, (cx - 7, by - 2, 14, 16), border_radius=2)
+    pygame.draw.rect(s, (50, 45, 35), (cx - 7, by - 2, 14, 16), 1, border_radius=2)
+    # Tears in armor
+    pygame.draw.line(s, UNDEAD_SKIN, (cx - 3, by + 2), (cx + 2, by + 8), 1)
+    # Arms
+    ay = by + 1 + int(arm_angle * 0.4)
+    pygame.draw.rect(s, UNDEAD_SKIN, (cx - 11, ay, 4, 12))
+    pygame.draw.rect(s, UNDEAD_SKIN, (cx + 7, ay, 4, 12))
+    # Head
+    head_y = by - 14
+    pygame.draw.ellipse(s, UNDEAD_SKIN, (cx - 6, head_y, 12, 12))
+    # Sunken eyes
+    pygame.draw.rect(s, (40, 20, 20), (cx - 4, head_y + 4, 3, 3))
+    pygame.draw.rect(s, (40, 20, 20), (cx + 1, head_y + 4, 3, 3))
+    pygame.draw.rect(s, (200, 60, 60), (cx - 3, head_y + 5, 1, 1))
+    pygame.draw.rect(s, (200, 60, 60), (cx + 2, head_y + 5, 1, 1))
+
+
+def gen_undead():
+    print("Generating undead...")
+    frames = []
+    for i in range(4):
+        s = make_surf()
+        dy = [0, 1, 0, -1][i]
+        draw_undead(s, body_dy=dy)
+        frames.append(s)
+    save_sheet(frames, "undead_idle")
+    frames = []
+    for i in range(4):
+        s = make_surf()
+        arm = [0, 2, 5, 1][i]
+        dy = [0, -1, 0, 1][i]
+        draw_undead(s, body_dy=dy, arm_angle=arm)
+        frames.append(s)
+    save_sheet(frames, "undead_attack")
+
+
+# ======================================================================
+#  STORY EXPANSION — NEW BACKGROUNDS
+# ======================================================================
+
+def gen_bg_ruins():
+    import random
+    print("Generating ruins background...")
+    s = pygame.Surface((BG_W, BG_H))
+    # Dark grey sky
+    for y in range(BG_H):
+        t = y / BG_H
+        r = int(30 + 20 * t)
+        g = int(30 + 15 * t)
+        b = int(35 + 18 * t)
+        pygame.draw.line(s, (r, g, b), (0, y), (BG_W, y))
+    # Stone floor
+    random.seed(100)
+    for y in range(BG_H - 120, BG_H):
+        for x in range(0, BG_W, 6):
+            c = 35 + random.randint(0, 15)
+            pygame.draw.rect(s, (c + 3, c + 2, c + 5), (x, y, 6, 6))
+    # Broken columns
+    for px in [150, 400, 700, 1000]:
+        h = random.randint(100, 250)
+        pygame.draw.rect(s, (55, 50, 60), (px - 12, BG_H - 120 - h, 24, h))
+        pygame.draw.rect(s, (40, 35, 45), (px - 12, BG_H - 120 - h, 24, h), 1)
+        # Broken top
+        for bx in range(-8, 9, 4):
+            by = random.randint(-10, 5)
+            pygame.draw.rect(s, (55, 50, 60), (px + bx, BG_H - 120 - h + by, 4, 8))
+    # Archway
+    pygame.draw.arc(s, (50, 45, 55), (BG_W // 2 - 80, BG_H - 320, 160, 200), 0, 3.14, 4)
+    # Gate text
+    for tx in range(BG_W // 2 - 50, BG_W // 2 + 50, 8):
+        pygame.draw.rect(s, (70, 65, 75), (tx, BG_H - 290, 5, 3))
+    # Fog patches
+    for _ in range(8):
+        fx = random.randint(0, BG_W)
+        fy = random.randint(BG_H - 200, BG_H - 80)
+        fog = pygame.Surface((120, 40), pygame.SRCALPHA)
+        pygame.draw.ellipse(fog, (60, 60, 70, 30), (0, 0, 120, 40))
+        s.blit(fog, (fx, fy))
+    save_bg(s, "ruins")
+
+
+def gen_bg_temple():
+    import random
+    print("Generating temple background...")
+    s = pygame.Surface((BG_W, BG_H))
+    s.fill((25, 20, 35))
+    # Stone walls
+    random.seed(111)
+    for y in range(0, BG_H - 100, 20):
+        offset = 15 if (y // 20) % 2 else 0
+        for x in range(-15 + offset, BG_W + 15, 40):
+            c = 25 + random.randint(0, 10)
+            pygame.draw.rect(s, (c + 3, c, c + 8), (x, y, 38, 18))
+            pygame.draw.rect(s, (18, 15, 22), (x, y, 38, 18), 1)
+    # Stone floor
+    for y in range(BG_H - 100, BG_H):
+        for x in range(0, BG_W, 8):
+            c = 30 + random.randint(0, 12)
+            pygame.draw.rect(s, (c + 5, c + 3, c + 8), (x, y, 8, 8))
+    # Pews (rows of stone seats)
+    for row in range(3):
+        py = BG_H - 160 + row * 30
+        for px in range(200, BG_W - 200, 60):
+            pygame.draw.rect(s, (45, 35, 50), (px, py, 40, 12))
+            pygame.draw.rect(s, (55, 45, 60), (px, py, 40, 4))
+    # Altar at front
+    pygame.draw.rect(s, (50, 40, 60), (BG_W // 2 - 40, BG_H - 200, 80, 40))
+    pygame.draw.rect(s, (65, 55, 75), (BG_W // 2 - 40, BG_H - 200, 80, 8))
+    # Mirror on altar (cracked)
+    mx, my = BG_W // 2, BG_H - 240
+    pygame.draw.ellipse(s, (120, 130, 150), (mx - 20, my, 40, 50))
+    pygame.draw.ellipse(s, (80, 90, 110), (mx - 20, my, 40, 50), 2)
+    # Crack lines
+    pygame.draw.line(s, (60, 60, 80), (mx, my + 10), (mx + 12, my + 35), 1)
+    pygame.draw.line(s, (60, 60, 80), (mx, my + 10), (mx - 8, my + 30), 1)
+    save_bg(s, "temple")
+
+
+def gen_bg_barracks():
+    import random
+    print("Generating barracks background...")
+    s = pygame.Surface((BG_W, BG_H))
+    s.fill((28, 22, 30))
+    random.seed(122)
+    # Stone walls
+    for y in range(0, BG_H - 100, 20):
+        for x in range(0, BG_W, 40):
+            c = 28 + random.randint(0, 10)
+            pygame.draw.rect(s, (c + 5, c + 2, c + 5), (x, y, 38, 18))
+            pygame.draw.rect(s, (18, 15, 20), (x, y, 38, 18), 1)
+    # Wood floor
+    for y in range(BG_H - 100, BG_H):
+        for x in range(0, BG_W, 30):
+            c = 40 + random.randint(0, 10) + (x // 30 % 2) * 5
+            pygame.draw.rect(s, (c + 8, c, c - 5), (x, y, 30, 1))
+    # Bunk beds
+    for bx in [100, 350, 600, 850]:
+        # Frame
+        pygame.draw.rect(s, (50, 35, 20), (bx, BG_H - 220, 80, 120))
+        pygame.draw.rect(s, (60, 42, 25), (bx, BG_H - 220, 80, 120), 2)
+        # Mattress (top)
+        pygame.draw.rect(s, (70, 55, 40), (bx + 5, BG_H - 180, 70, 12))
+        # Mattress (bottom)
+        pygame.draw.rect(s, (70, 55, 40), (bx + 5, BG_H - 120, 70, 12))
+    # Card table
+    pygame.draw.rect(s, (60, 45, 25), (BG_W // 2 - 50, BG_H - 160, 100, 60))
+    pygame.draw.rect(s, (75, 55, 30), (BG_W // 2 - 50, BG_H - 160, 100, 8))
+    # Cards on table
+    for cx_off in [-20, -5, 10, 25]:
+        pygame.draw.rect(s, (220, 210, 190), (BG_W // 2 + cx_off, BG_H - 148, 10, 14), border_radius=1)
+    save_bg(s, "barracks")
+
+
+def gen_bg_mansion():
+    import random
+    print("Generating mansion background...")
+    s = pygame.Surface((BG_W, BG_H))
+    s.fill((22, 18, 28))
+    random.seed(133)
+    # Ornate wallpaper
+    for y in range(0, BG_H - 100, 4):
+        c = 22 + int(math.sin(y * 0.1) * 5)
+        pygame.draw.line(s, (c + 5, c, c + 10), (0, y), (BG_W, y))
+    # Marble floor
+    for y in range(BG_H - 100, BG_H):
+        for x in range(0, BG_W, 8):
+            c = 35 + random.randint(0, 15)
+            pygame.draw.rect(s, (c + 8, c + 6, c + 10), (x, y, 8, 8))
+    # Portrait frames on wall
+    for px in [200, 450, 750, 1000]:
+        pygame.draw.rect(s, (80, 60, 30), (px - 25, 80, 50, 70), 3)
+        pygame.draw.rect(s, (40, 30, 45), (px - 22, 83, 44, 64))
+        # Scratched face
+        pygame.draw.line(s, (60, 50, 40), (px - 10, 95), (px + 10, 120), 2)
+        pygame.draw.line(s, (60, 50, 40), (px + 10, 95), (px - 10, 120), 2)
+    # Vines
+    for vx in [50, BG_W - 50]:
+        for vy in range(0, BG_H - 100, 8):
+            pygame.draw.rect(s, (20, 50 + random.randint(0, 20), 15), (vx + random.randint(-3, 3), vy, 3, 8))
+    # Cold locked door
+    dx = BG_W // 2
+    pygame.draw.rect(s, (40, 50, 70), (dx - 30, BG_H - 250, 60, 150))
+    pygame.draw.rect(s, (60, 70, 90), (dx - 30, BG_H - 250, 60, 150), 2)
+    # Ice around keyhole
+    pygame.draw.circle(s, (150, 180, 220), (dx, BG_H - 170), 8)
+    pygame.draw.circle(s, (180, 210, 240), (dx, BG_H - 170), 4)
+    save_bg(s, "mansion")
+
+
+def gen_bg_mountain():
+    import random
+    print("Generating mountain background...")
+    s = pygame.Surface((BG_W, BG_H))
+    # Sky gradient (cold blue)
+    for y in range(BG_H):
+        t = y / BG_H
+        r = int(40 + 30 * t)
+        g = int(50 + 40 * t)
+        b = int(80 + 40 * (1 - t))
+        pygame.draw.line(s, (r, g, b), (0, y), (BG_W, y))
+    random.seed(144)
+    # Mountain peaks in background
+    for mx, mh in [(200, 300), (500, 350), (900, 280), (1100, 320)]:
+        pts = [(mx - 120, BG_H - 100), (mx, BG_H - 100 - mh), (mx + 120, BG_H - 100)]
+        pygame.draw.polygon(s, (50, 55, 65), pts)
+        # Snow caps
+        snow_pts = [(mx - 20, BG_H - 100 - mh + 30), (mx, BG_H - 100 - mh), (mx + 20, BG_H - 100 - mh + 30)]
+        pygame.draw.polygon(s, (200, 210, 220), snow_pts)
+    # Rocky ground
+    for y in range(BG_H - 100, BG_H):
+        for x in range(0, BG_W, 6):
+            c = 40 + random.randint(0, 15)
+            pygame.draw.rect(s, (c + 5, c + 3, c), (x, y, 6, 6))
+    # Cave mouth
+    cx = BG_W // 2
+    pygame.draw.ellipse(s, (15, 12, 20), (cx - 60, BG_H - 230, 120, 140))
+    pygame.draw.ellipse(s, (25, 22, 30), (cx - 60, BG_H - 230, 120, 140), 2)
+    # Old woman's fire spot (faint glow)
+    glow = pygame.Surface((60, 40), pygame.SRCALPHA)
+    pygame.draw.ellipse(glow, (180, 100, 30, 40), (0, 0, 60, 40))
+    s.blit(glow, (cx - 130, BG_H - 140))
+    save_bg(s, "mountain")
+
+
+def gen_bg_cave():
+    import random
+    print("Generating cave background...")
+    s = pygame.Surface((BG_W, BG_H))
+    s.fill((12, 10, 18))
+    random.seed(155)
+    # Rocky walls
+    for _ in range(200):
+        x = random.randint(0, BG_W)
+        y = random.randint(0, BG_H)
+        c = 12 + random.randint(0, 10)
+        pygame.draw.circle(s, (c + 3, c, c + 5), (x, y), random.randint(10, 40))
+    # Crystal formations (blue glow)
+    crystal_positions = [(200, 300), (400, 150), (700, 250), (900, 180), (1100, 350)]
+    for cx, cy in crystal_positions:
+        # Crystal shard
+        pts = [(cx, cy - 30), (cx - 8, cy + 10), (cx + 8, cy + 10)]
+        pygame.draw.polygon(s, (60, 100, 180), pts)
+        pygame.draw.polygon(s, (100, 150, 220), pts, 1)
+        # Glow
+        glow = pygame.Surface((40, 40), pygame.SRCALPHA)
+        pygame.draw.circle(glow, (60, 100, 180, 30), (20, 20), 20)
+        s.blit(glow, (cx - 20, cy - 20))
+    # Stone floor
+    for y in range(BG_H - 80, BG_H):
+        for x in range(0, BG_W, 6):
+            c = 18 + random.randint(0, 8)
+            pygame.draw.rect(s, (c + 3, c, c + 4), (x, y, 6, 6))
+    save_bg(s, "cave")
+
+
+def gen_bg_valley():
+    import random
+    print("Generating valley background...")
+    s = pygame.Surface((BG_W, BG_H))
+    # Warm golden-green gradient
+    for y in range(BG_H):
+        t = y / BG_H
+        r = int(60 + 40 * (1 - t))
+        g = int(80 + 50 * (1 - t))
+        b = int(30 + 20 * (1 - t))
+        pygame.draw.line(s, (r, g, b), (0, y), (BG_W, y))
+    random.seed(166)
+    # Flowers
+    for _ in range(50):
+        fx = random.randint(0, BG_W)
+        fy = random.randint(BG_H - 150, BG_H - 20)
+        c = random.choice([(220, 80, 120), (80, 140, 220), (220, 200, 60), (200, 120, 220)])
+        pygame.draw.circle(s, c, (fx, fy), random.randint(2, 4))
+    # Stone ring wall
+    for x in range(BG_W // 4, BG_W * 3 // 4, 8):
+        wh = 40 + random.randint(0, 10)
+        c = 60 + random.randint(0, 15)
+        pygame.draw.rect(s, (c, c - 5, c - 10), (x, BG_H - 100 - wh, 6, wh))
+    # Small houses inside wall
+    for hx in [BG_W // 3, BG_W // 2, BG_W * 2 // 3]:
+        pygame.draw.rect(s, (80, 60, 40), (hx - 15, BG_H - 160, 30, 30))
+        pygame.draw.polygon(s, (120, 80, 40), [(hx - 18, BG_H - 160), (hx, BG_H - 180), (hx + 18, BG_H - 160)])
+    # Shambling undead silhouettes outside wall
+    for ux in range(80, BG_W // 4 - 20, 30):
+        uy = BG_H - 110
+        pygame.draw.ellipse(s, (50, 60, 40), (ux, uy - 10, 8, 10))
+        pygame.draw.rect(s, (50, 60, 40), (ux + 1, uy, 6, 12))
+    for ux in range(BG_W * 3 // 4 + 20, BG_W - 40, 30):
+        uy = BG_H - 110
+        pygame.draw.ellipse(s, (50, 60, 40), (ux, uy - 10, 8, 10))
+        pygame.draw.rect(s, (50, 60, 40), (ux + 1, uy, 6, 12))
+    save_bg(s, "valley")
+
+
+def gen_bg_tower():
+    import random
+    print("Generating demon tower background...")
+    s = pygame.Surface((BG_W, BG_H))
+    # Very dark purple sky
+    for y in range(BG_H):
+        t = y / BG_H
+        r = int(15 + 10 * t)
+        g = int(5 + 5 * t)
+        b = int(25 + 15 * t)
+        pygame.draw.line(s, (r, g, b), (0, y), (BG_W, y))
+    random.seed(177)
+    # Tower interior walls (dark iron)
+    for y in range(0, BG_H - 80, 20):
+        for x in range(0, BG_W, 35):
+            c = 18 + random.randint(0, 8)
+            pygame.draw.rect(s, (c, c - 2, c + 5), (x, y, 33, 18))
+            pygame.draw.rect(s, (10, 8, 15), (x, y, 33, 18), 1)
+    # Iron floor
+    for y in range(BG_H - 80, BG_H):
+        for x in range(0, BG_W, 8):
+            c = 22 + random.randint(0, 10)
+            pygame.draw.rect(s, (c + 3, c, c + 6), (x, y, 8, 8))
+    # Purple flame torches
+    for tx in [100, 350, 650, BG_W - 100]:
+        pygame.draw.rect(s, (30, 20, 40), (tx - 3, 100, 6, 30))
+        for fi in range(4):
+            fy = 95 - fi * 5
+            fw = 10 - fi * 2
+            fc = (80 + fi * 15, 20 + fi * 5, 120 - fi * 15)
+            pygame.draw.ellipse(s, fc, (tx - fw // 2, fy, fw, 8))
+    # Throne silhouette at back
+    pygame.draw.rect(s, (10, 5, 15), (BG_W // 2 - 40, BG_H - 250, 80, 170))
+    pygame.draw.polygon(s, (15, 8, 20), [
+        (BG_W // 2 - 50, BG_H - 250),
+        (BG_W // 2, BG_H - 320),
+        (BG_W // 2 + 50, BG_H - 250),
+    ])
+    save_bg(s, "tower")
+
+
+def gen_bg_cellar():
+    import random
+    print("Generating cellar background...")
+    s = pygame.Surface((BG_W, BG_H))
+    s.fill((15, 12, 20))
+    random.seed(188)
+    # Crude stone walls
+    for y in range(0, BG_H - 80, 18):
+        for x in range(0, BG_W, 32):
+            c = 18 + random.randint(0, 10)
+            pygame.draw.rect(s, (c + 3, c, c + 5), (x, y, 30, 16))
+            pygame.draw.rect(s, (12, 10, 15), (x, y, 30, 16), 1)
+    # Stone steps (left side)
+    for step in range(5):
+        sy = 50 + step * 40
+        sw = 60 + step * 10
+        pygame.draw.rect(s, (35, 30, 40), (10, sy, sw, 15))
+    # Ritual symbols on floor
+    cx, cy = BG_W // 2, BG_H - 120
+    pygame.draw.circle(s, (80, 20, 20), (cx, cy), 60, 2)
+    pygame.draw.circle(s, (60, 15, 15), (cx, cy), 40, 1)
+    # Pentagram-ish lines
+    for angle in range(0, 360, 72):
+        rad = math.radians(angle)
+        rad2 = math.radians(angle + 144)
+        x1 = cx + int(55 * math.cos(rad))
+        y1 = cy + int(55 * math.sin(rad))
+        x2 = cx + int(55 * math.cos(rad2))
+        y2 = cy + int(55 * math.sin(rad2))
+        pygame.draw.line(s, (80, 20, 20), (x1, y1), (x2, y2), 1)
+    # Blue light (from below)
+    glow = pygame.Surface((200, 100), pygame.SRCALPHA)
+    pygame.draw.ellipse(glow, (40, 60, 180, 30), (0, 0, 200, 100))
+    s.blit(glow, (BG_W // 2 - 100, BG_H - 160))
+    # Caged animals (small rectangles)
+    for cage_x in [100, 250, BG_W - 250, BG_W - 100]:
+        pygame.draw.rect(s, (50, 45, 55), (cage_x, BG_H - 160, 40, 30), 1)
+    save_bg(s, "cellar")
+
+
+# ======================================================================
 #  MAIN
 # ======================================================================
 if __name__ == "__main__":
@@ -1027,6 +1902,15 @@ if __name__ == "__main__":
     gen_golem()
     gen_spider()
     gen_dark_knight()
+    gen_imp()
+    gen_oracle()
+    gen_dragon()
+    gen_mirror_wraith()
+    gen_revenant()
+    gen_malachar()
+    gen_necromancer()
+    gen_lore_golem()
+    gen_undead()
     gen_bg_forest()
     gen_bg_field()
     gen_bg_combat()
@@ -1035,5 +1919,14 @@ if __name__ == "__main__":
     gen_bg_gameover()
     gen_bg_loot()
     gen_bg_arcade()
+    gen_bg_ruins()
+    gen_bg_temple()
+    gen_bg_barracks()
+    gen_bg_mansion()
+    gen_bg_mountain()
+    gen_bg_cave()
+    gen_bg_valley()
+    gen_bg_tower()
+    gen_bg_cellar()
     print("\nAll assets generated!")
     pygame.quit()
