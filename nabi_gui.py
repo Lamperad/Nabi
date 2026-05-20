@@ -15,7 +15,7 @@ import math
 # ---------------------------------------------------------------------------
 #  CONSTANTS
 # ---------------------------------------------------------------------------
-VERSION = "4.2.2"
+VERSION = "5.0.0"
 SAVE_FILE = "save_data.json"
 ARCADE_SAVE_FILE = "arcade_save.json"
 SCREEN_W, SCREEN_H = 960, 640
@@ -57,6 +57,7 @@ C_VULN = (255, 80, 80)
 DEFAULT_PLAYER_STATS = {
     "hp": 100, "max_hp": 100, "atk": 20, "def": 15, "max_def": 15,
     "coins": 0, "level": 1, "xp": 0, "cowardice": 0, "combo": 0,
+    "bone_key": False, "mirror_vision": False, "signet_ring": False,
     "inventory": {"hp_potions": 2, "dp_potions": 2}
 }
 player_stats = copy.deepcopy(DEFAULT_PLAYER_STATS)
@@ -397,6 +398,43 @@ spr_spider_idle = load_sheet("spider_idle")
 spr_spider_attack = load_sheet("spider_attack")
 spr_dk_idle = load_sheet("dark_knight_idle")
 spr_dk_attack = load_sheet("dark_knight_attack")
+
+# Story expansion sprites
+spr_imp_idle = load_sheet("imp_idle")
+spr_imp_attack = load_sheet("imp_attack")
+spr_oracle_idle = load_sheet("oracle_idle")
+spr_dragon_idle = load_sheet("dragon_idle")
+spr_dragon_attack = load_sheet("dragon_attack")
+spr_mirror_wraith_idle = load_sheet("mirror_wraith_idle")
+spr_mirror_wraith_attack = load_sheet("mirror_wraith_attack")
+spr_revenant_idle = load_sheet("revenant_idle")
+spr_revenant_attack = load_sheet("revenant_attack")
+spr_malachar_idle = load_sheet("malachar_idle")
+spr_malachar_attack = load_sheet("malachar_attack")
+spr_necromancer_idle = load_sheet("necromancer_idle")
+spr_necromancer_attack = load_sheet("necromancer_attack")
+spr_lore_golem_idle = load_sheet("lore_golem_idle")
+spr_lore_golem_attack = load_sheet("lore_golem_attack")
+spr_undead_idle = load_sheet("undead_idle")
+spr_undead_attack = load_sheet("undead_attack")
+
+# Enemy sprite lookup for combat_screen
+ENEMY_SPRITES = {
+    "demon": (spr_demon_idle, spr_demon_attack),
+    "malachar": (spr_malachar_idle, spr_malachar_attack),
+    "dragon": (spr_dragon_idle, spr_dragon_attack),
+    "veth": (spr_dragon_idle, spr_dragon_attack),
+    "mirror wraith": (spr_mirror_wraith_idle, spr_mirror_wraith_attack),
+    "revenant": (spr_revenant_idle, spr_revenant_attack),
+    "skeleton": (spr_skeleton_idle, spr_skeleton_attack),
+    "lore golem": (spr_lore_golem_idle, spr_lore_golem_attack),
+    "golem": (spr_lore_golem_idle, spr_lore_golem_attack),
+    "ghoul": (spr_undead_idle, spr_undead_attack),
+    "undead": (spr_undead_idle, spr_undead_attack),
+    "necromancer": (spr_necromancer_idle, spr_necromancer_attack),
+    "imp": (spr_imp_idle, spr_imp_attack),
+    "shadow imp": (spr_imp_idle, spr_imp_attack),
+}
 
 # Monster type definitions for arcade mode
 MONSTER_TYPES = [
@@ -1061,16 +1099,21 @@ def combat_screen(enemy_name):
     e_max_atk = e_atk
     e_dp = int(random.randint(5 + player_stats["level"], 15 + player_stats["level"]) * c_mult)
 
-    is_demon = "demon" in enemy_name.lower()
-    enemy_sheet = spr_demon_idle if is_demon else spr_dan_idle
-    enemy_attack_sheet = spr_demon_attack if is_demon else spr_dan_angry
+    en_lower = enemy_name.lower()
+    enemy_sheet = spr_dan_idle
+    enemy_attack_sheet = spr_dan_angry
+    for key, (idle, attack) in ENEMY_SPRITES.items():
+        if key in en_lower:
+            enemy_sheet = idle
+            enemy_attack_sheet = attack
+            break
     enemy_sprite = AnimatedSprite(enemy_sheet, SCREEN_W - 300, 280, fps=5)
     enemy_sprite.flip_h = True
 
     player_sprite.set_sheet(spr_player_idle)
     player_sprite.set_pos(150, 280)
 
-    if is_demon:
+    if "demon" in en_lower or "malachar" in en_lower:
         play_sound("demon_roar")
 
     log = [f"Battle: {player_name} vs {enemy_name}!"]
@@ -1758,47 +1801,63 @@ def scene_forest():
     player_sprite.set_sheet(spr_player_idle)
     player_sprite.set_pos(200, 380)
 
+    def _reset_forest_bg():
+        bg.layers = []
+        bg.add_layer(load_bg("forest_sky"), 0)
+        bg.add_layer(load_bg("forest_far_trees"), 8)
+        bg.add_layer(load_bg("forest_fog"), 15)
+        bg.add_layer(load_bg("forest_near_trees"), 25)
+
+    def _walk_back_to_forest():
+        _reset_forest_bg()
+        player_sprite.set_sheet(spr_player_walk)
+        player_sprite.set_pos(-100, 380)
+        player_sprite.move_to(200, 380)
+        wait_for_movement([player_sprite], 1500)
+        player_sprite.set_sheet(spr_player_idle)
+
     while True:
         choice = show_menu("THE DARK FOREST",
-                           ["Go Right (Dan's Field)", "Go Left (Deep Forest)", "Shop", "Leave Forest"],
+                           ["Go Right (Dan's Field)", "Go Left (Haunted Ruins)",
+                            "Go Straight (Mountain Pass)", "Shop", "Leave Forest"],
                            [player_sprite],
-                           subtitle="Two paths stretch before you...")
+                           subtitle="Three paths stretch before you...")
         save_game()
 
-        if choice == 3:
+        if choice == 4:
             typewriter(["You decide to head back..."], [player_sprite])
             return "menu"
-        elif choice == 2:
-            typewriter(["Isn't it a bit early to be shopping?"], [player_sprite])
+        elif choice == 3:
+            result = shop_screen()
+            _reset_forest_bg()
             continue
         elif choice == 1:
             player_sprite.set_sheet(spr_player_walk)
             player_sprite.move_to(-100, 380)
             wait_for_movement([player_sprite], 1500)
-            typewriter(["You head left into the deep forest...", "But there's nothing here yet."], [], narrator_visible=True)
-            player_sprite.set_pos(SCREEN_W + 100, 380)
-            player_sprite.move_to(200, 380)
-            player_sprite.set_sheet(spr_player_idle)
+            result = scene_ruins()
+            if result in ("victory", "victory_end", "defeat", "gameover"):
+                return result
+            _walk_back_to_forest()
+            continue
+        elif choice == 2:
+            player_sprite.set_sheet(spr_player_walk)
+            player_sprite.move_to(SCREEN_W + 100, 380)
             wait_for_movement([player_sprite], 1500)
+            result = scene_mountain()
+            if result in ("victory", "victory_end", "defeat", "gameover"):
+                return result
+            _walk_back_to_forest()
             continue
         elif choice == 0:
             player_sprite.set_sheet(spr_player_walk)
             player_sprite.move_to(SCREEN_W + 100, 380)
             wait_for_movement([player_sprite], 1500)
             result = scene_dan_field()
-            if result in ("victory", "defeat", "gameover"):
+            if result in ("victory", "victory_end", "defeat", "gameover"):
                 return result
-            # Return to forest
-            bg.layers = []
-            bg.add_layer(load_bg("forest_sky"), 0)
-            bg.add_layer(load_bg("forest_far_trees"), 8)
-            bg.add_layer(load_bg("forest_fog"), 15)
-            bg.add_layer(load_bg("forest_near_trees"), 25)
-            player_sprite.set_sheet(spr_player_walk)
-            player_sprite.set_pos(-100, 380)
-            player_sprite.move_to(200, 380)
-            wait_for_movement([player_sprite], 1500)
-            player_sprite.set_sheet(spr_player_idle)
+            _walk_back_to_forest()
+            continue
 
 
 def scene_dan_field():
@@ -1923,6 +1982,10 @@ def scene_dan_transforms():
     if result == "victory":
         bg.set_static(load_bg("field"))
         typewriter(["The demon crumbles to dust.", "You have proven yourself, warrior!"], [player_sprite])
+        cellar_result = scene_dan_cellar()
+        if cellar_result in ("victory_end", "defeat", "gameover"):
+            return cellar_result
+        return "continue"
     return result
 
 
@@ -1976,7 +2039,812 @@ def scene_dan_option4():
         if result == "victory":
             bg.set_static(load_bg("field"))
             typewriter(["The demon crumbles to dust!"], [player_sprite])
+            cellar_result = scene_dan_cellar()
+            if cellar_result in ("victory_end", "defeat", "gameover"):
+                return cellar_result
+            return "continue"
         return result
+
+
+# ---------------------------------------------------------------------------
+#  STORY EXPANSION — DAN CELLAR + DEMON TOWER (RIGHT PATH CONT.)
+# ---------------------------------------------------------------------------
+def scene_dan_cellar():
+    bg.set_static(load_bg("cellar"))
+    fade_transition(400)
+    imp_sprite = AnimatedSprite(spr_imp_idle, 600, 350, fps=5)
+
+    typewriter([
+        "With Dan defeated, you notice the farmhouse door is ajar.",
+        "A strange blue light flickers from below — a cellar.",
+    ], [player_sprite])
+
+    ch = show_menu("EXPLORE?", ["Explore the cellar", "Leave"], [player_sprite])
+    if ch == 1:
+        typewriter(["You leave the farm behind."], [player_sprite])
+        return "continue"
+
+    player_sprite.set_sheet(spr_player_walk)
+    player_sprite.set_pos(-100, 380)
+    player_sprite.move_to(200, 380)
+    wait_for_movement([player_sprite], 1500)
+    player_sprite.set_sheet(spr_player_idle)
+
+    typewriter([
+        "You descend crude stone steps. Sulphur and old paper.",
+        "Ritual symbols, caged animals, and one surprised imp.",
+        "",
+        "Imp: 'OI! Who killed my master?!'",
+        "Imp: '…Actually, if you're strong enough…'",
+        "Imp: 'How'd you like a guide? I know every secret in Nabi.'",
+    ], [player_sprite, imp_sprite])
+
+    ch = show_menu("THE IMP", [
+        "Accept the imp as your guide",
+        "Attack it",
+        "Ignore it and loot the cellar",
+    ], [player_sprite, imp_sprite])
+
+    if ch == 0:
+        typewriter([
+            "The imp — GRUB — perches on your shoulder.",
+            "Grub: 'Don't call me late for dinner. Let's GO.'",
+            "Grub's tips improve your combat! ATK +3",
+        ], [player_sprite, imp_sprite])
+        gain_xp(30)
+        player_stats["atk"] += 3
+        show_message("ATK +3 | XP +30", C_GREEN, 1500)
+
+        typewriter([
+            "Grub: 'Master kept his REAL loot behind the bookcase.'",
+            "A section of wall grinds open. Gold and a glowing stone!",
+        ], [player_sprite, imp_sprite])
+        loot_box_screen()
+        coins = drop_coins()
+        show_message(f"+{coins} coins!", C_GOLD, 1000)
+        return scene_demon_tower(imp_sprite)
+
+    elif ch == 1:
+        typewriter([
+            "The imp SHRIEKS and transforms into a shadow beast!",
+        ], [player_sprite, imp_sprite])
+        result = combat_screen("Shadow Imp")
+        if result == "victory":
+            gain_xp(40)
+            coins = drop_coins()
+            show_message(f"XP +40 | +{coins} coins", C_GREEN, 1500)
+            typewriter(["On the floor: a small key carved from bone."], [player_sprite])
+            player_stats.setdefault("bone_key", True)
+        return result if result in ("defeat", "gameover") else "continue"
+
+    else:
+        loot_box_screen(is_cursed=random.random() < 0.4)
+        coins = drop_coins()
+        show_message(f"+{coins} coins!", C_GOLD, 1000)
+        typewriter(["Grub: 'Fine. Good luck dying out there. Alone.'"], [player_sprite])
+        return "continue"
+
+
+def scene_demon_tower(imp_sprite=None):
+    bg.set_static(load_bg("tower"))
+    fade_transition(400)
+    sprites = [player_sprite]
+    if imp_sprite:
+        imp_sprite.set_pos(280, 390)
+        sprites.append(imp_sprite)
+
+    typewriter([
+        "Grub leads you to a black iron tower.",
+        "Grub: 'Dan answered to someone. Up there.'",
+        "Grub: 'I'd go in but… prior engagement. With not dying.'",
+    ], sprites)
+
+    ch = show_menu("DEMON TOWER", ["Enter the tower", "Back away"], sprites)
+    if ch == 1:
+        player_stats["cowardice"] = player_stats.get("cowardice", 0) + 1
+        show_message(f"Cowardice +1 ({player_stats['cowardice']})", C_RED, 1200)
+        return "continue"
+
+    # Floor 1
+    typewriter([
+        "--- FLOOR 1: THE GAUNTLET ---",
+        "Skeletal soldiers line the corridor.",
+    ], sprites)
+    result = combat_screen("Skeleton Captain")
+    if result in ("defeat", "gameover"):
+        return result
+    gain_xp(50)
+    loot_box_screen()
+
+    # Floor 2
+    bg.set_static(load_bg("tower"))
+    typewriter([
+        "--- FLOOR 2: THE LIBRARY OF LIES ---",
+        "Books fly off shelves and form a hulking golem!",
+    ], sprites)
+    result = combat_screen("Lore Golem")
+    if result in ("defeat", "gameover"):
+        return result
+    gain_xp(60)
+    coins = drop_coins()
+    show_message(f"XP +60 | +{coins} coins", C_GREEN, 1500)
+
+    # Floor 3 — Malachar
+    bg.set_static(load_bg("tower"))
+    typewriter([
+        "--- FLOOR 3: THE THRONE ROOM ---",
+        "A figure in armour so black it eats the light.",
+        "???: 'I am MALACHAR. Archdemon of Nabi.'",
+        "???: 'And you… are VERY lost.'",
+    ], sprites)
+
+    ch = show_menu("MALACHAR", [
+        "Fight Malachar",
+        "Try to negotiate",
+        "Run (coward)",
+    ], sprites)
+
+    if ch == 2:
+        player_stats["cowardice"] = player_stats.get("cowardice", 0) + 3
+        show_message(f"Cowardice +3 ({player_stats['cowardice']})", C_RED, 1200)
+        typewriter(["You bolt. Malachar laughs. The tower collapses."], sprites)
+        return "continue"
+
+    if ch == 1:
+        typewriter(["Malachar: '…Negotiate? A mortal?'"], sprites)
+        roll = random.randint(1, 3)
+        if roll == 1:
+            won = scene_riddle_challenge()
+            if won:
+                typewriter([
+                    "Malachar: 'Clever wretch. I'll let you leave.'",
+                    "--- YOU SURVIVED MALACHAR BY WIT ALONE ---",
+                ], sprites)
+                gain_xp(100)
+                loot_box_screen()
+                return "victory_end"
+            else:
+                typewriter(["Malachar: 'Wrong. I grow bored.'"], sprites)
+        else:
+            dmg = 30
+            player_stats["hp"] -= dmg
+            show_message(f"Malachar blasts you! -{dmg} HP", C_RED, 1200)
+            if player_stats["hp"] <= 0:
+                typewriter(["--- GAME OVER ---"], sprites)
+                save_game()
+                return "gameover"
+            typewriter(["Diplomacy failed. Time for Plan B."], sprites)
+
+    typewriter(["You charge. Malachar smiles."], sprites)
+    result = combat_screen("Malachar the Archdemon")
+    if result == "victory":
+        return scene_malachar_victory()
+    return result
+
+
+def scene_riddle_challenge():
+    riddles = [
+        ("I have cities but no houses, forests but no trees,\nand water but no fish. What am I?", "map"),
+        ("The more you take, the more you leave behind.\nWhat am I?", "footsteps"),
+        ("I speak without a mouth and hear without ears.\nI come alive with wind. What am I?", "echo"),
+    ]
+    random.shuffle(riddles)
+    score = 0
+
+    typewriter(["Malachar: 'Three riddles. Answer them all.'"], [player_sprite])
+
+    for i, (question, answer) in enumerate(riddles[:3]):
+        typewriter([f"Riddle {i+1}: {question}"], [player_sprite])
+        options = [answer.capitalize(), "Shadow", "Time", "Nothing"]
+        random.shuffle(options)
+        correct_idx = options.index(answer.capitalize())
+        ch = show_menu(f"RIDDLE {i+1}", options, [player_sprite])
+        if ch == correct_idx:
+            show_message("Correct!", C_GREEN, 800)
+            score += 1
+        else:
+            show_message(f"Wrong! Answer: {answer}", C_RED, 1200)
+
+    return score >= 2
+
+
+def scene_malachar_victory():
+    bg.set_static(load_bg("tower"))
+    typewriter([
+        "MALACHAR DEFEATED!",
+        "The tower shatters. Stars never before seen.",
+        "Malachar: '…You… haven't seen… the last…'",
+        "Grub: 'I totally helped. You're welcome.'",
+    ], [player_sprite])
+    gain_xp(150)
+    loot_box_screen()
+    coins = drop_coins()
+    show_message(f"XP +150 | +{coins} coins!", C_GOLD, 2000)
+    typewriter([
+        f"{player_name} HAS SAVED NABI — FOR NOW.",
+        "Epilogue: Grub opens a kebab stand. Very popular.",
+    ], [player_sprite])
+    save_game()
+    return "victory_end"
+
+
+# ---------------------------------------------------------------------------
+#  LEFT PATH — THE HAUNTED RUINS
+# ---------------------------------------------------------------------------
+def scene_ruins():
+    bg.set_static(load_bg("ruins"))
+    fade_transition(400)
+    player_sprite.set_sheet(spr_player_walk)
+    player_sprite.set_pos(-100, 380)
+    player_sprite.move_to(200, 380)
+    wait_for_movement([player_sprite], 1500)
+    player_sprite.set_sheet(spr_player_idle)
+
+    typewriter([
+        "The forest grows darker and colder.",
+        "Stone arches, shattered columns, black water.",
+        "Carved above the gate: ASHENVEIL — CITY OF THE FORGOTTEN",
+    ], [player_sprite])
+
+    ch = show_menu("ASHENVEIL RUINS", ["Enter the ruins", "Turn back"], [player_sprite])
+    if ch == 1:
+        player_stats["cowardice"] = player_stats.get("cowardice", 0) + 1
+        show_message(f"Cowardice +1 ({player_stats['cowardice']})", C_RED, 1200)
+        return "continue"
+
+    typewriter([
+        "Your footsteps echo strangely.",
+        "Three buildings still stand:",
+    ], [player_sprite])
+
+    ch = show_menu("EXPLORE RUINS", [
+        "A — The Old Temple",
+        "B — The Guard Barracks",
+        "C — The Lord's Mansion",
+        "Leave",
+    ], [player_sprite])
+
+    if ch == 0:
+        return scene_ruins_temple()
+    elif ch == 1:
+        return scene_ruins_barracks()
+    elif ch == 2:
+        return scene_ruins_mansion()
+    return "continue"
+
+
+def scene_ruins_temple():
+    bg.set_static(load_bg("temple"))
+    fade_transition(300)
+
+    typewriter([
+        "── THE OLD TEMPLE ──",
+        "Stone pews face an altar. A cracked mirror sits upon it.",
+        "Your reflection MOVES ON ITS OWN.",
+        "Reflection: 'I've been waiting, original.'",
+    ], [player_sprite])
+
+    ch = show_menu("THE MIRROR", [
+        "Speak to the reflection",
+        "Smash the mirror",
+        "Leave immediately",
+    ], [player_sprite])
+
+    if ch == 0:
+        typewriter([
+            "Reflection: 'I am you. A version from a different path.'",
+            "Reflection: 'I know things about Malachar. About what's buried.'",
+            "It presses its palm to the glass. 'Swap with me. Just once.'",
+        ], [player_sprite])
+        swap = show_menu("TOUCH THE MIRROR?", ["Press your palm", "Step back"], [player_sprite])
+        if swap == 0:
+            typewriter([
+                "The cold glass pulls you in!",
+                "You see a memory — a child burying a box under the mansion.",
+                "You snap back, gasping.",
+                "(You received the VISION. Something is under the Mansion.)",
+            ], [player_sprite])
+            player_stats["mirror_vision"] = True
+            gain_xp(25)
+            show_message("Mirror Vision acquired! XP +25", C_BLUE, 1500)
+        else:
+            typewriter(["The reflection looks sad, then blank."], [player_sprite])
+
+    elif ch == 1:
+        typewriter([
+            "You HURL a stone at the mirror!",
+            "Shards rise and form a MIRROR WRAITH!",
+        ], [player_sprite])
+        result = combat_screen("Mirror Wraith")
+        if result == "victory":
+            gain_xp(50)
+            player_stats["atk"] += 5
+            show_message("ATK +5 | XP +50", C_GREEN, 1500)
+            typewriter(["A gemstone from the shards. It sharpens your instincts."], [player_sprite])
+        elif result in ("defeat", "gameover"):
+            return result
+
+    else:
+        typewriter(["You back out. Some things are better left alone."], [player_sprite])
+
+    return "continue"
+
+
+def scene_ruins_barracks():
+    bg.set_static(load_bg("barracks"))
+    fade_transition(300)
+    skel_sprite = AnimatedSprite(spr_skeleton_idle, 550, 340, fps=4)
+
+    typewriter([
+        "── THE GUARD BARRACKS ──",
+        "Rusted bunks. One skeleton seated at a card table.",
+        "Skeleton: 'Finally! Someone to finish this game!'",
+    ], [player_sprite, skel_sprite])
+
+    ch = show_menu("BONE POKER", ["Play cards", "Decline"], [player_sprite, skel_sprite])
+    if ch == 1:
+        typewriter(["Skeleton: 'Story of my afterlife.'"], [player_sprite, skel_sprite])
+    else:
+        typewriter(["--- BONE POKER --- Best of three!"], [player_sprite, skel_sprite])
+        player_wins = 0
+        skel_wins = 0
+        for rd in range(1, 4):
+            p_card = random.randint(1, 13)
+            s_card = random.randint(1, 13)
+            show_message(f"Round {rd}: You drew {p_card} | Skeleton drew {s_card}", C_GOLD, 1500)
+            if p_card > s_card:
+                player_wins += 1
+                show_message("You win this round!", C_GREEN, 800)
+            elif s_card > p_card:
+                skel_wins += 1
+                show_message("Skeleton wins!", C_RED, 800)
+            else:
+                show_message("Tie!", C_BLUE, 800)
+
+        if player_wins > skel_wins:
+            typewriter(["Skeleton: 'HAH! I lose again!'",
+                        "It reaches into its ribcage and produces potions."], [player_sprite, skel_sprite])
+            player_stats["inventory"]["hp_potions"] += 2
+            player_stats["inventory"]["dp_potions"] += 2
+            gain_xp(30)
+            show_message("+2 HP Potions, +2 Shield Potions, XP +30", C_GREEN, 2000)
+        elif skel_wins > player_wins:
+            typewriter(["Skeleton: 'After 400 years — I WIN!'",
+                        "It explodes into confetti-like bone dust!"], [player_sprite])
+            coins = drop_coins()
+            show_message(f"+{coins} coins!", C_GOLD, 1000)
+        else:
+            typewriter(["Skeleton: 'A draw. Come back sometime.'"], [player_sprite, skel_sprite])
+            gain_xp(15)
+            show_message("XP +15", C_GREEN, 800)
+
+    # Trapdoor
+    typewriter(["You notice a trapdoor under one of the beds."], [player_sprite])
+    ch = show_menu("TRAPDOOR", ["Open it", "Leave it"], [player_sprite])
+    if ch == 0:
+        roll = random.randint(1, 3)
+        if roll == 1:
+            typewriter(["A GHOUL lunges out!"], [player_sprite])
+            result = combat_screen("Barracks Ghoul")
+            if result == "victory":
+                gain_xp(40)
+                loot_box_screen()
+            elif result in ("defeat", "gameover"):
+                return result
+        elif roll == 2:
+            coins = drop_coins()
+            player_stats["max_def"] += 3
+            player_stats["def"] = player_stats["max_def"]
+            show_message(f"Old Shield! Max DP +3 | +{coins} coins", C_GREEN, 1500)
+        else:
+            typewriter(["Darkness and old biscuits. Nothing else."], [player_sprite])
+
+    return "continue"
+
+
+def scene_ruins_mansion():
+    bg.set_static(load_bg("mansion"))
+    fade_transition(300)
+
+    typewriter([
+        "── THE LORD'S MANSION ──",
+        "Hollow and vine-choked. Portraits with scratched faces.",
+        "A locked door. Ice forms around the keyhole.",
+    ], [player_sprite])
+
+    has_vision = player_stats.get("mirror_vision", False)
+    if has_vision:
+        typewriter([
+            "(Your mirror vision PULSES. Something is below.)",
+            "You pry up floorboards. A box! Inside: a signet ring.",
+            "Letter: 'The Lord made a pact with Dan the demon.'",
+            "'The ring commands the mansion's guardian.'",
+        ], [player_sprite])
+        player_stats["signet_ring"] = True
+        player_stats["atk"] += 7
+        gain_xp(40)
+        show_message("Signet Ring! ATK +7, XP +40", C_GOLD, 2000)
+
+    ch = show_menu("MANSION", ["Open the cold locked door", "Leave"], [player_sprite])
+    if ch == 1:
+        typewriter(["The portraits watch you go."], [player_sprite])
+        return "continue"
+
+    typewriter([
+        "Steps lead to a crypt. A REVENANT KNIGHT kneels.",
+    ], [player_sprite])
+
+    if player_stats.get("signet_ring", False):
+        typewriter([
+            "You hold up the signet ring. Its eyes glow gold.",
+            "Revenant: 'My lord's seal. The pact is broken.'",
+            "Revenant: 'You have my blade, warrior.'",
+        ], [player_sprite])
+        player_stats["atk"] = max(player_stats["atk"], 60)
+        gain_xp(70)
+        show_message(f"REVENANT'S BLADE! ATK → {player_stats['atk']}", C_GOLD, 2000)
+        loot_box_screen()
+    else:
+        typewriter([
+            "Revenant: 'INTRUDER. YOU ARE NOT MY LORD.'",
+            "It rises, drawing a shadow-fire greatsword!",
+        ], [player_sprite])
+        result = combat_screen("Revenant Knight")
+        if result == "victory":
+            gain_xp(80)
+            player_stats["max_def"] += 10
+            player_stats["def"] = player_stats["max_def"]
+            show_message(f"Max Shield +10 → {player_stats['max_def']}", C_BLUE, 1500)
+            loot_box_screen()
+        elif result in ("defeat", "gameover"):
+            return result
+
+    return "continue"
+
+
+# ---------------------------------------------------------------------------
+#  MIDDLE PATH — THE MOUNTAIN PASS
+# ---------------------------------------------------------------------------
+def scene_mountain():
+    bg.set_static(load_bg("mountain"))
+    fade_transition(400)
+    oracle_sprite = AnimatedSprite(spr_oracle_idle, 550, 340, fps=4)
+    player_sprite.set_sheet(spr_player_walk)
+    player_sprite.set_pos(-100, 380)
+    player_sprite.move_to(200, 380)
+    wait_for_movement([player_sprite], 1500)
+    player_sprite.set_sheet(spr_player_idle)
+
+    typewriter([
+        "The middle path climbs steeply. Icy wind.",
+        "A cave mouth above. An old woman warming her hands.",
+        "Old Woman: 'Took you long enough. Sit.'",
+    ], [player_sprite, oracle_sprite])
+
+    ch = show_menu("THE MOUNTAIN PASS", [
+        "Sit with the old woman",
+        "Enter the cave directly",
+        "Descend to the valley",
+        "Go back",
+    ], [player_sprite, oracle_sprite])
+
+    if ch == 0:
+        return scene_mountain_oracle(oracle_sprite)
+    elif ch == 1:
+        return scene_mountain_cave()
+    elif ch == 2:
+        return scene_valley()
+    return "continue"
+
+
+def scene_mountain_oracle(oracle_sprite):
+    bg.set_static(load_bg("mountain"))
+
+    typewriter([
+        "Oracle: 'I am Ysel. I see the threads of what will be.'",
+        f"Oracle: 'I see you, {player_name}. Ask one question.'",
+    ], [player_sprite, oracle_sprite])
+
+    ch = show_menu("ASK YSEL", [
+        "What is my destiny?",
+        "How do I defeat Malachar?",
+        "What is Dan hiding?",
+        "Will I survive this?",
+    ], [player_sprite, oracle_sprite])
+
+    responses = [
+        "Ysel: 'Your destiny is not fixed. I see a throne of ash.'",
+        "Ysel: 'Malachar fears being forgotten. Make him feel small.'",
+        "Ysel: 'Dan hides a tower. And his master hides everything.'",
+        "Ysel: 'Yes. But not without cost.'",
+    ]
+    typewriter([responses[ch]], [player_sprite, oracle_sprite])
+    gain_xp(20)
+
+    player_stats["inventory"]["hp_potions"] += 1
+    player_stats["max_hp"] += 10
+    player_stats["hp"] = min(player_stats["hp"] + 10, player_stats["max_hp"])
+    show_message(f"Stone of Ysel: +1 Potion, Max HP +10 → {player_stats['max_hp']}", C_GREEN, 2000)
+
+    typewriter(["Ysel: 'The cave behind me — go.'"], [player_sprite, oracle_sprite])
+    return scene_mountain_cave()
+
+
+def scene_mountain_cave():
+    bg.set_static(load_bg("cave"))
+    fade_transition(300)
+    dragon_sprite = AnimatedSprite(spr_dragon_idle, 550, 300, fps=4)
+
+    typewriter([
+        "── THE CAVE ──",
+        "Crystals hum and glow blue. A dragon sleeps curled up.",
+        "Gold-black scales shimmer.",
+    ], [player_sprite, dragon_sprite])
+
+    ch = show_menu("THE DRAGON", [
+        "Sneak past",
+        "Wake it and talk",
+        "Attack the sleeping dragon",
+        "Leave the cave",
+    ], [player_sprite, dragon_sprite])
+
+    if ch == 0:
+        roll = random.randint(1, 3)
+        if roll == 1:
+            typewriter([
+                "Your boot catches a crystal shard. It rings!",
+                "Dragon: '…Three seconds to explain yourself.'",
+            ], [player_sprite, dragon_sprite])
+            return scene_dragon_talk(dragon_sprite)
+        else:
+            typewriter([
+                "You move like a ghost. Behind it: a crystal chest.",
+                "CRYSTAL HEART obtained!",
+            ], [player_sprite])
+            player_stats["atk"] += 10
+            player_stats["max_hp"] += 15
+            player_stats["hp"] = player_stats["max_hp"]
+            gain_xp(50)
+            show_message(f"ATK +10, Max HP +15!", C_GOLD, 2000)
+            return "continue"
+
+    elif ch == 1:
+        typewriter([
+            "Dragon: 'You DARE—' It tilts its head.",
+            "Dragon: 'You're not screaming. Interesting.'",
+        ], [player_sprite, dragon_sprite])
+        return scene_dragon_talk(dragon_sprite)
+
+    elif ch == 2:
+        typewriter([
+            "You STRIKE the sleeping dragon!",
+            "Dragon: 'DO YOU KNOW HOW LONG I WAS ASLEEP?!'",
+        ], [player_sprite, dragon_sprite])
+        result = combat_screen("Furious Cave Dragon")
+        if result == "victory":
+            gain_xp(120)
+            loot_box_screen()
+            coins = drop_coins()
+            show_message(f"XP +120 | +{coins} coins!", C_GOLD, 1500)
+            loot_box_screen()
+        return result if result in ("defeat", "gameover") else "continue"
+
+    return "continue"
+
+
+def scene_dragon_talk(dragon_sprite):
+    bg.set_static(load_bg("cave"))
+
+    typewriter([
+        "Dragon: 'I am VETH. Three hundred years asleep.'",
+        "Veth: 'State your purpose or I will eat you.'",
+    ], [player_sprite, dragon_sprite])
+
+    ch = show_menu("SPEAK TO VETH", [
+        "I seek power to fight a great evil",
+        "I was just exploring",
+        "I came to challenge you",
+        "...Are you okay?",
+    ], [player_sprite, dragon_sprite])
+
+    if ch == 0:
+        typewriter([
+            "Veth: 'Malachar. If someone's finally going after him…'",
+            "Veth breathes golden fire onto your weapon!",
+        ], [player_sprite, dragon_sprite])
+        player_stats["atk"] += 15
+        gain_xp(60)
+        show_message(f"DRAGON'S BLESSING! ATK +15 → {player_stats['atk']}", C_GOLD, 2000)
+
+    elif ch == 1:
+        typewriter([
+            "Veth: 'Just exploring. In a DRAGON'S CAVE.'",
+            "Veth: '…I respect it. Take this dragon scale.'",
+        ], [player_sprite, dragon_sprite])
+        player_stats["max_def"] += 8
+        player_stats["def"] = player_stats["max_def"]
+        gain_xp(30)
+        show_message(f"DRAGON SCALE! Max Shield +8 → {player_stats['max_def']}", C_BLUE, 2000)
+
+    elif ch == 2:
+        typewriter([
+            "Veth: 'Challenge me? Delightful. Unhinged.'",
+        ], [player_sprite, dragon_sprite])
+        result = combat_screen("Veth the Cave Dragon (Holding Back)")
+        if result == "victory":
+            gain_xp(100)
+            typewriter(["Veth: 'Genuinely impressed.'"], [player_sprite, dragon_sprite])
+            loot_box_screen()
+            loot_box_screen()
+            coins = drop_coins()
+            player_stats["atk"] += 8
+            show_message(f"WARRIOR'S RESPECT! ATK +8 | +{coins} coins", C_GOLD, 2000)
+        return result if result in ("defeat", "gameover") else "continue"
+
+    elif ch == 3:
+        typewriter([
+            "Veth: '…Nobody has asked me that in 300 years.'",
+            "Veth: 'I am... fine. Just very tired.'",
+            "Veth: 'Take this. I don't need it.'",
+        ], [player_sprite, dragon_sprite])
+        player_stats["inventory"]["hp_potions"] += 3
+        player_stats["max_hp"] += 20
+        player_stats["hp"] = player_stats["max_hp"]
+        gain_xp(50)
+        show_message(f"+3 Potions, Max HP +20 → {player_stats['max_hp']}", C_GREEN, 2000)
+
+    return "continue"
+
+
+def scene_valley():
+    bg.set_static(load_bg("valley"))
+    fade_transition(400)
+    player_sprite.set_sheet(spr_player_walk)
+    player_sprite.set_pos(-100, 380)
+    player_sprite.move_to(200, 380)
+    wait_for_movement([player_sprite], 1500)
+    player_sprite.set_sheet(spr_player_idle)
+
+    typewriter([
+        "── THE SHIMMERING VALLEY ──",
+        "Warm air, spiral flowers. A small peaceful village.",
+        "But surrounded by stone, and outside: hundreds of undead.",
+        "",
+        "Child: 'Are you a hero? We sent ravens three months ago.'",
+        "Child: 'You're late. But we're not picky.'",
+    ], [player_sprite])
+
+    ch = show_menu("HELP THE VILLAGE?", ["Yes, help them", "Turn away"], [player_sprite])
+    if ch == 1:
+        player_stats["cowardice"] = player_stats.get("cowardice", 0) + 2
+        show_message(f"Cowardice +2 ({player_stats['cowardice']})", C_RED, 1200)
+        typewriter(["The child's face falls. You will remember that."], [player_sprite])
+        return "continue"
+
+    typewriter([
+        "── THE VILLAGE OF EVENMERE ──",
+        "Elder Rho: 'The dead appeared eight days ago.'",
+        "A plaque: 'DELIVER THE SOULSTONE OR THE SIEGE NEVER ENDS — M'",
+    ], [player_sprite])
+
+    ch = show_menu("APPROACH", [
+        "Fight through the undead",
+        "Search the village for clues",
+        "Confront whoever left the message",
+    ], [player_sprite])
+
+    if ch == 0:
+        typewriter(["You vault the wall and charge!"], [player_sprite])
+        result = combat_screen("Undead Horde (First Wave)")
+        if result in ("defeat", "gameover"):
+            return result
+        gain_xp(60)
+        result = combat_screen("Undead Horde (Second Wave)")
+        if result in ("defeat", "gameover"):
+            return result
+        gain_xp(60)
+        show_message("XP +120 total!", C_GREEN, 1200)
+        typewriter(["More are rising. Rho: 'We need the SOURCE.'"], [player_sprite])
+        return scene_valley_necromancer()
+
+    elif ch == 1:
+        typewriter([
+            "In the chapel basement: a SOULSTONE. It pulses with light.",
+            "Rho: 'We had it all along?!'",
+        ], [player_sprite])
+
+        ch2 = show_menu("THE SOULSTONE", [
+            "Give it to whoever left the message",
+            "Destroy the soulstone",
+            "Use the soulstone yourself",
+        ], [player_sprite])
+
+        if ch2 == 0:
+            return scene_valley_necromancer()
+        elif ch2 == 1:
+            typewriter([
+                "You SMASH the soulstone! Light screams outward!",
+                "The undead collapse like puppets.",
+                "The energy went into you.",
+            ], [player_sprite])
+            player_stats["max_hp"] += 30
+            player_stats["hp"] = player_stats["max_hp"]
+            player_stats["atk"] += 10
+            gain_xp(80)
+            show_message(f"SOULSTONE! Max HP +30, ATK +10!", C_GOLD, 2000)
+            typewriter(["Rho: 'You absolute maniac. Thank you.'"], [player_sprite])
+            coins = drop_coins()
+            coins2 = drop_coins()
+            show_message(f"+{coins + coins2} coins!", C_GOLD, 1000)
+            return "continue"
+        else:
+            typewriter([
+                "The soulstone bonds to you! Max HP +20.",
+                "The undead ignore YOU now. But the village is still trapped.",
+            ], [player_sprite])
+            player_stats["max_hp"] += 20
+            player_stats["hp"] = player_stats["max_hp"]
+            gain_xp(50)
+            show_message(f"Max HP +20 → {player_stats['max_hp']}", C_GREEN, 1500)
+            return "continue"
+
+    else:
+        return scene_valley_necromancer()
+
+
+def scene_valley_necromancer():
+    bg.set_static(load_bg("valley"))
+    necro_sprite = AnimatedSprite(spr_necromancer_idle, 600, 340, fps=4)
+
+    typewriter([
+        "At the hilltop: a cloaked figure. Young. Exhausted.",
+        "Necromancer: 'I'm not a villain. I'm desperate.'",
+        "Necromancer: 'The soulstone holds my sister's soul.'",
+        "Necromancer: 'She died. I need the stone to save her.'",
+    ], [player_sprite, necro_sprite])
+
+    ch = show_menu("THE NECROMANCER", [
+        "Help — give the soulstone",
+        "Fight the necromancer",
+        "Ask more questions",
+    ], [player_sprite, necro_sprite])
+
+    if ch == 0:
+        typewriter([
+            "The undead collapse. The sister's spirit rises —",
+            "— and smiles, once, dissolving into golden light.",
+            "Necromancer: 'Thank you. I owe you a debt.'",
+        ], [player_sprite, necro_sprite])
+        gain_xp(80)
+        player_stats["inventory"]["hp_potions"] += 2
+        player_stats["max_def"] += 5
+        player_stats["def"] = player_stats["max_def"]
+        coins = drop_coins()
+        show_message(f"+2 Potions, Max Shield +5, +{coins} coins", C_GREEN, 2000)
+
+    elif ch == 1:
+        typewriter([
+            "Necromancer: 'Of course. Nothing is ever simple.'",
+        ], [player_sprite, necro_sprite])
+        result = combat_screen("Desperate Necromancer")
+        if result == "victory":
+            gain_xp(70)
+            typewriter(["A cracked orb still glows faintly."], [player_sprite])
+            loot_box_screen(is_cursed=True)
+        elif result in ("defeat", "gameover"):
+            return result
+
+    else:
+        typewriter([
+            "Necromancer: 'Malachar created soulstones as TRAPS.'",
+            "Necromancer: 'I repurposed the technique.'",
+        ], [player_sprite, necro_sprite])
+        gain_xp(25)
+        show_message("XP +25", C_GREEN, 800)
+        return scene_valley_necromancer()
+
+    save_game()
+    return "continue"
 
 
 # ---------------------------------------------------------------------------
