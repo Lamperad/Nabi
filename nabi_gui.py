@@ -15,7 +15,7 @@ import math
 # ---------------------------------------------------------------------------
 #  CONSTANTS
 # ---------------------------------------------------------------------------
-VERSION = "4.2.1"
+VERSION = "4.2.2"
 SAVE_FILE = "save_data.json"
 ARCADE_SAVE_FILE = "arcade_save.json"
 SCREEN_W, SCREEN_H = 960, 640
@@ -198,8 +198,6 @@ def do_shield_restore(log):
 # ---------------------------------------------------------------------------
 #  PYGAME INIT
 # ---------------------------------------------------------------------------
-os.environ["SDL_AUDIODRIVER"] = "dummy"
-
 pygame.init()
 try:
     pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
